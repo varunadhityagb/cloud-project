@@ -112,3 +112,32 @@ spec:
   ports:
   - port: 5000
     nodePort: 30500
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbon-profiler
+  namespace: carbon-profiling
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carbon-profiler
+  template:
+    metadata:
+      labels:
+        app: carbon-profiler
+    spec:
+      containers:
+      - name: profiler
+        image: carbon-profiler-worker:latest
+        imagePullPolicy: Never
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_USER
+          value: "carbon_user"
+        - name: DB_PASSWORD
+          value: "carbon_pass_123"
+        - name: DB_NAME
+          value: "carbon_metrics"

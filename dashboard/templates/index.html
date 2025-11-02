@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Profiling Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .chart-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+        .emoji {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .refresh-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        .refresh-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Dynamic Carbon Profiling Dashboard</h1>
+        
+        <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
+        
+        <div class="loading" id="loading">Loading dashboard...</div>
+        
+        <div id="dashboard" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="emoji">💨</div>
+                    <div class="stat-label">Total CO₂ Emissions</div>
+                    <div class="stat-value" id="total-carbon">-</div>
+                    <div class="stat-label">grams</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="emoji">⚡</div>
+                    <div class="stat-label">Energy Consumed</div>
+                    <div class="stat-value" id="total-energy">-</div>
+                    <div class="stat-label">kWh</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="emoji">💻</div>
+                    <div class="stat-label">Devices Tracked</div>
+                    <div class="stat-value" id="device-count">-</div>
+                    <div class="stat-label">unique</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="emoji">📊</div>
+                    <div class="stat-label">Measurements</div>
+                    <div class="stat-value" id="measurement-count">-</div>
+                    <div class="stat-label">collected</div>
+                </div>
+            </div>
+            
+            <div class="grid-2">
+                <div class="chart-container">
+                    <div class="chart-title">⏰ Carbon Emissions by Hour</div>
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">🔋 Grid Carbon Intensity</div>
+                    <canvas id="gridIntensityChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">💻 Carbon Emissions by Device</div>
+                <canvas id="deviceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+
+        async function loadData() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/dashboard/summary');
+                const data = await response.json();
+                
+                updateStats(data.carbon_summary, data.system_stats);
+                updateCharts(data.by_hour, data.by_device);
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML = '❌ Error loading data. Check console.';
+            }
+        }
+
+        function updateStats(carbonSummary, systemStats) {
+            document.getElementById('total-carbon').textContent = 
+                carbonSummary.total_carbon_grams.toFixed(4);
+            document.getElementById('total-energy').textContent = 
+                (carbonSummary.total_energy_kwh * 1000).toFixed(2);
+            document.getElementById('device-count').textContent = 
+                carbonSummary.unique_devices;
+            document.getElementById('measurement-count').textContent = 
+                systemStats.total_records;
+        }
+
+        function updateCharts(byHour, byDevice) {
+            // Hourly emissions chart
+            const hourlyData = byHour.hourly_breakdown.sort((a, b) => a.hour - b.hour);
+            if (charts.hourly) charts.hourly.destroy();
+            charts.hourly = new Chart(document.getElementById('hourlyChart'), {
+                type: 'bar',
+                data: {
+                    labels: hourlyData.map(h => `${h.hour}:00`),
+                    datasets: [{
+                        label: 'CO₂ Emissions (g)',
+                        data: hourlyData.map(h => h.total_carbon_grams),
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'grams CO₂' } }
+                    }
+                }
+            });
+
+            // Grid intensity chart
+            if (charts.grid) charts.grid.destroy();
+            charts.grid = new Chart(document.getElementById('gridIntensityChart'), {
+                type: 'line',
+                data: {
+                    labels: hourlyData.map(h => `${h.hour}:00`),
+                    datasets: [{
+                        label: 'Grid Intensity (gCO₂/kWh)',
+                        data: hourlyData.map(h => h.avg_grid_intensity_gco2_kwh),
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'gCO₂/kWh' } }
+                    }
+                }
+            });
+
+            // Device chart
+            const deviceData = byDevice.devices.slice(0, 10);
+            if (charts.device) charts.device.destroy();
+            charts.device = new Chart(document.getElementById('deviceChart'), {
+                type: 'bar',
+                data: {
+                    labels: deviceData.map(d => d.device_id),
+                    datasets: [{
+                        label: 'Total CO₂ Emissions (g)',
+                        data: deviceData.map(d => d.total_carbon_grams),
+                        backgroundColor: 'rgba(118, 75, 162, 0.6)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    scales: {
+                        x: { beginAtZero: true, title: { display: true, text: 'grams CO₂' } }
+                    }
+                }
+            });
+        }
+
+        // Load data on page load
+        loadData();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

@@ -1,12 +1,12 @@
 {
-  "device_id": "device_8206",
+  "device_id": "device_8068",
   "device_type": "laptop",
-  "timestamp": "2025-10-27T14:20:54.753255+00:00",
+  "timestamp": "2025-11-12T11:09:17.558400+00:00",
   "system_metrics": {
-    "cpu_percent": 4.5,
-    "memory_percent": 29.2,
-    "total_power_watts": 9.66,
-    "cpu_count": 8
+    "cpu_percent": 11.1,
+    "memory_percent": 57.8,
+    "total_power_watts": 12.11,
+    "cpu_count": 16
   },
   "applications": []
 }

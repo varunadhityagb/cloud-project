@@ -9,7 +9,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #F5F5DC 0%, #EDE2CF 100%);
             color: #333;
             padding: 20px;
             min-height: 100vh;
@@ -78,6 +78,24 @@
             font-size: 1.5em;
             padding: 50px;
         }
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .debug-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 0.85em;
+            max-height: 300px;
+            overflow-y: auto;
+        }
         .emoji {
             font-size: 2em;
             margin-bottom: 10px;
@@ -108,6 +126,7 @@
         <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
         
         <div class="loading" id="loading">Loading dashboard...</div>
+        <div id="error-container"></div>
         
         <div id="dashboard" style="display: none;">
             <div class="stats-grid">
@@ -122,7 +141,7 @@
                     <div class="emoji">⚡</div>
                     <div class="stat-label">Energy Consumed</div>
                     <div class="stat-value" id="total-energy">-</div>
-                    <div class="stat-label">kWh</div>
+                    <div class="stat-label">Wh</div>
                 </div>
                 
                 <div class="stat-card">
@@ -165,10 +184,35 @@
         async function loadData() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('error-container').innerHTML = '';
             
             try {
                 const response = await fetch('/api/dashboard/summary');
                 const data = await response.json();
+                
+                // Check if there's an error in the response
+                if (data.error) {
+                    showError('API Error', data.error);
+                    return;
+                }
+                
+                // Validate data structure
+                if (!data.carbon_summary) {
+                    showError('Invalid Data', 'carbon_summary is missing from API response', data);
+                    return;
+                }
+                
+                if (!data.system_stats) {
+                    showError('Invalid Data', 'system_stats is missing from API response', data);
+                    return;
+                }
+                
+                // Check if we have any data at all
+                const totalRecords = data.system_stats.total_records || 0;
+                if (totalRecords === 0) {
+                    showError('No Data', 'No metrics have been collected yet. Start the device agent to begin collecting data.');
+                    return;
+                }
                 
                 updateStats(data.carbon_summary, data.system_stats);
                 updateCharts(data.by_hour, data.by_device);
@@ -177,22 +221,47 @@
                 document.getElementById('dashboard').style.display = 'block';
             } catch (error) {
                 console.error('Error loading data:', error);
-                document.getElementById('loading').innerHTML = '❌ Error loading data. Check console.';
+                showError('Connection Error', error.message, error);
             }
         }
 
+        function showError(title, message, debugData) {
+            document.getElementById('loading').style.display = 'none';
+            const errorHtml = `
+                <div class="error-message">
+                    <h2>❌ ${title}</h2>
+                    <p>${message}</p>
+                    ${debugData ? `<div class="debug-info"><pre>${JSON.stringify(debugData, null, 2)}</pre></div>` : ''}
+                </div>
+            `;
+            document.getElementById('error-container').innerHTML = errorHtml;
+        }
+
         function updateStats(carbonSummary, systemStats) {
-            document.getElementById('total-carbon').textContent = 
-                carbonSummary.total_carbon_grams.toFixed(4);
-            document.getElementById('total-energy').textContent = 
-                (carbonSummary.total_energy_kwh * 1000).toFixed(2);
-            document.getElementById('device-count').textContent = 
-                carbonSummary.unique_devices;
-            document.getElementById('measurement-count').textContent = 
-                systemStats.total_records;
+            // Safely access values with defaults
+            const totalCarbon = carbonSummary.total_carbon_grams || 0;
+            const totalEnergy = carbonSummary.total_energy_kwh || 0;
+            const uniqueDevices = carbonSummary.unique_devices || 0;
+            const totalRecords = systemStats.total_records || 0;
+            
+            document.getElementById('total-carbon').textContent = totalCarbon.toFixed(4);
+            document.getElementById('total-energy').textContent = (totalEnergy * 1000).toFixed(2);
+            document.getElementById('device-count').textContent = uniqueDevices;
+            document.getElementById('measurement-count').textContent = totalRecords;
         }
 
         function updateCharts(byHour, byDevice) {
+            // Validate data
+            if (!byHour || !byHour.hourly_breakdown) {
+                console.warn('No hourly data available');
+                return;
+            }
+            
+            if (!byDevice || !byDevice.devices) {
+                console.warn('No device data available');
+                return;
+            }
+            
             // Hourly emissions chart
             const hourlyData = byHour.hourly_breakdown.sort((a, b) => a.hour - b.hour);
             if (charts.hourly) charts.hourly.destroy();
@@ -202,7 +271,7 @@
                     labels: hourlyData.map(h => `${h.hour}:00`),
                     datasets: [{
                         label: 'CO₂ Emissions (g)',
-                        data: hourlyData.map(h => h.total_carbon_grams),
+                        data: hourlyData.map(h => h.total_carbon_grams || 0),
                         backgroundColor: 'rgba(102, 126, 234, 0.6)',
                         borderColor: 'rgba(102, 126, 234, 1)',
                         borderWidth: 2
@@ -224,7 +293,7 @@
                     labels: hourlyData.map(h => `${h.hour}:00`),
                     datasets: [{
                         label: 'Grid Intensity (gCO₂/kWh)',
-                        data: hourlyData.map(h => h.avg_grid_intensity_gco2_kwh),
+                        data: hourlyData.map(h => h.avg_grid_intensity_gco2_kwh || 0),
                         backgroundColor: 'rgba(255, 99, 132, 0.2)',
                         borderColor: 'rgba(255, 99, 132, 1)',
                         borderWidth: 3,
@@ -249,7 +318,7 @@
                     labels: deviceData.map(d => d.device_id),
                     datasets: [{
                         label: 'Total CO₂ Emissions (g)',
-                        data: deviceData.map(d => d.total_carbon_grams),
+                        data: deviceData.map(d => d.total_carbon_grams || 0),
                         backgroundColor: 'rgba(118, 75, 162, 0.6)',
                         borderColor: 'rgba(118, 75, 162, 1)',
                         borderWidth: 2

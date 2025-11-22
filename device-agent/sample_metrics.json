@@ -1,7 +1,7 @@
 {
-  "device_id": "device_6638",
+  "device_id": "device_62109b02",
   "device_type": "laptop",
-  "timestamp": "2025-11-22T10:02:41.951776+00:00",
+  "timestamp": "2025-11-22T11:41:25.604418+00:00",
   "location": {
     "latitude": 12.9716,
     "longitude": 77.5946,
@@ -11,9 +11,9 @@
     "country_code": "IN"
   },
   "system_metrics": {
-    "cpu_percent": 8.6,
-    "memory_percent": 44.1,
-    "total_power_watts": 11.18,
+    "cpu_percent": 3.3,
+    "memory_percent": 36.5,
+    "total_power_watts": 9.22,
     "cpu_count": 8
   },
   "applications": []

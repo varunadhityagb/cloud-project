@@ -2,26 +2,154 @@ import psutil
 import time
 import json
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 import random
 import requests
 import os
+import subprocess
+import sys
+from pathlib import Path
 from geolocation_utils import get_device_location
+
+class DeviceConfig:
+    """Manages persistent device configuration."""
+    
+    def __init__(self, config_path: str = ".device_config.json"):
+        self.config_path = Path(config_path)
+        self.config = self._load_or_create_config()
+    
+    def _generate_device_id(self) -> str:
+        """Generate a unique device ID based on system info."""
+        try:
+            # Try to get a stable hardware identifier
+            import platform
+            import hashlib
+            
+            # Combine multiple system identifiers for uniqueness
+            system_info = f"{platform.node()}-{platform.machine()}-{platform.system()}"
+            
+            # Try to get MAC address for additional uniqueness
+            try:
+                import uuid
+                mac = uuid.getnode()
+                system_info += f"-{mac}"
+            except:
+                pass
+            
+            # Create a short hash of the system info
+            hash_obj = hashlib.md5(system_info.encode())
+            device_hash = hash_obj.hexdigest()[:8]
+            
+            return f"device_{device_hash}"
+        except:
+            # Fallback to random if system info fails
+            return f"device_{random.randint(10000, 99999)}"
+    
+    def _load_or_create_config(self) -> Dict:
+        """Load existing config or create new one."""
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, 'r') as f:
+                    config = json.load(f)
+                    print(f"✅ Loaded existing device config: {config['device_id']}")
+                    return config
+            except Exception as e:
+                print(f"⚠️  Error loading config: {e}")
+        
+        # Create new config
+        config = {
+            "device_id": self._generate_device_id(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "device_type": "laptop"
+        }
+        
+        self._save_config(config)
+        print(f"✨ Created new device config: {config['device_id']}")
+        return config
+    
+    def _save_config(self, config: Dict):
+        """Save config to file."""
+        try:
+            with open(self.config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            print(f"⚠️  Error saving config: {e}")
+    
+    def get_device_id(self) -> str:
+        return self.config['device_id']
+    
+    def get_device_type(self) -> str:
+        return self.config.get('device_type', 'laptop')
+    
+    def set_device_type(self, device_type: str):
+        self.config['device_type'] = device_type
+        self._save_config(self.config)
+
+
+class APIEndpointDetector:
+    """Automatically detects the API endpoint from minikube."""
+    
+    @staticmethod
+    def detect_minikube_endpoint() -> Optional[str]:
+        """Try to auto-detect the minikube service URL."""
+        try:
+            result = subprocess.run(
+                ['minikube', 'service', 'ingestion-api-service', '-n', 'carbon-profiling', '--url'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                url = result.stdout.strip().split('\n')[0]
+                if url.startswith('http'):
+                    print(f"✅ Auto-detected API endpoint: {url}")
+                    return url
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            print(f"⚠️  Could not auto-detect minikube endpoint: {e}")
+        
+        return None
+    
+    @staticmethod
+    def get_endpoint() -> str:
+        """Get API endpoint with fallback strategy."""
+        # 1. Check environment variable
+        env_endpoint = os.environ.get('API_ENDPOINT')
+        if env_endpoint:
+            print(f"✅ Using API endpoint from environment: {env_endpoint}")
+            return env_endpoint
+        
+        # 2. Try to auto-detect from minikube
+        print("🔍 No API_ENDPOINT set, attempting auto-detection...")
+        minikube_endpoint = APIEndpointDetector.detect_minikube_endpoint()
+        if minikube_endpoint:
+            return minikube_endpoint
+        
+        # 3. Use localhost fallback
+        fallback = "http://localhost:5000"
+        print(f"⚠️  Using fallback endpoint: {fallback}")
+        print(f"💡 Tip: Set API_ENDPOINT environment variable or ensure minikube is running")
+        return fallback
+
 
 class DeviceAgent:
     def __init__(self, device_id: str = None, api_endpoint: str = None):
-        """Initialize the device monitoring agent with location detection."""
-        self.device_id = device_id or f"device_{random.randint(1000, 9999)}"
-        self.api_endpoint = api_endpoint or os.environ.get('API_ENDPOINT', 'http://localhost:5000')
-
+        """Initialize the device monitoring agent with persistent config."""
+        # Load or create device config
+        self.config = DeviceConfig()
+        self.device_id = device_id or self.config.get_device_id()
+        self.device_type = self.config.get_device_type()
+        
+        # Detect API endpoint
+        self.api_endpoint = api_endpoint or APIEndpointDetector.get_endpoint()
+        
         # Device profiles
         self.device_profiles = {
             "laptop": {"tdp": 45, "idle": 8},
             "desktop": {"tdp": 95, "idle": 25},
             "workstation": {"tdp": 150, "idle": 40}
         }
-        self.device_type = "laptop"
-
+        
         # Detect location on initialization
         print("\n🌍 Detecting device location...")
         self.location = get_device_location()
@@ -121,52 +249,97 @@ class DeviceAgent:
             print(f"❌ Connection Error: {str(e)}")
             return False
 
-    def simulate_and_print(self, interval: int = 5, duration: int = 60, send_to_api: bool = False):
-        """
-        Simulate data collection and print to console.
+    def test_api_connection(self) -> bool:
+        """Test if API is reachable."""
+        try:
+            response = requests.get(f"{self.api_endpoint}/health", timeout=5)
+            if response.status_code == 200:
+                print(f"✅ API connection successful")
+                return True
+            else:
+                print(f"⚠️  API returned status {response.status_code}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Cannot reach API: {e}")
+            return False
 
+    def run_continuous(self, interval: int = 5, send_to_api: bool = True):
+        """
+        Run continuous monitoring loop.
+        
         Args:
             interval: Seconds between collections
-            duration: Total simulation duration in seconds
             send_to_api: Whether to send data to the ingestion API
         """
-        print(f"🖥️  Device Agent Started: {self.device_id}")
+        print(f"\n{'='*80}")
+        print(f"🖥️  Device Agent Started")
+        print(f"{'='*80}")
+        print(f"📱 Device ID: {self.device_id}")
+        print(f"🔧 Device Type: {self.device_type}")
         print(f"📍 Location: {self.location['city_name']}, {self.location['country_name']}")
-        print(f"📊 Collecting metrics every {interval} seconds")
-        print(f"⏱️  Duration: {duration} seconds")
+        print(f"📊 Collection Interval: {interval} seconds")
+        print(f"🌐 API Endpoint: {self.api_endpoint}")
+        print(f"📤 API Sending: {'ENABLED' if send_to_api else 'DISABLED'}")
+        print(f"{'='*80}\n")
+
+        # Test API connection if enabled
         if send_to_api:
-            print(f"🌐 API Endpoint: {self.api_endpoint}")
-        print("=" * 80)
+            if not self.test_api_connection():
+                print("\n⚠️  WARNING: API is not reachable!")
+                print("💡 The agent will continue collecting data, but won't send to API")
+                response = input("Continue anyway? (y/n): ")
+                if response.lower() != 'y':
+                    print("Exiting...")
+                    return
+                send_to_api = False
 
-        iterations = duration // interval
+        print("\n🚀 Starting continuous monitoring... (Press Ctrl+C to stop)\n")
+        
+        collection_count = 0
+        success_count = 0
+        fail_count = 0
 
-        for i in range(iterations):
-            metrics = self.collect_metrics()
+        try:
+            while True:
+                collection_count += 1
+                
+                # Collect metrics
+                metrics = self.collect_metrics()
 
-            print(f"\n[Collection #{i+1}] {metrics['timestamp']}")
-            print(f"💻 System: CPU {metrics['system_metrics']['cpu_percent']}% | "
-                  f"RAM {metrics['system_metrics']['memory_percent']}% | "
-                  f"Power {metrics['system_metrics']['total_power_watts']}W")
+                # Display summary
+                print(f"\n[Collection #{collection_count}] {datetime.now().strftime('%H:%M:%S')}")
+                print(f"💻 CPU: {metrics['system_metrics']['cpu_percent']:>5}% | "
+                      f"RAM: {metrics['system_metrics']['memory_percent']:>5}% | "
+                      f"Power: {metrics['system_metrics']['total_power_watts']:>6}W")
 
-            if metrics['applications']:
-                print(f"\n🔝 Top Applications:")
-                for app in metrics['applications']:
-                    print(f"   • {app['app_name']:<20} "
-                          f"CPU: {app['cpu_percent']:>6}% | "
-                          f"Power: {app['estimated_power_watts']:>6}W")
+                # Send to API if enabled
+                if send_to_api:
+                    success = self.send_to_api(metrics)
+                    if success:
+                        success_count += 1
+                        print(f"📤 API: ✅ Sent (Success: {success_count}, Failed: {fail_count})")
+                    else:
+                        fail_count += 1
+                        print(f"📤 API: ❌ Failed (Success: {success_count}, Failed: {fail_count})")
+                else:
+                    print(f"📤 API: ⏭️  Skipped (local mode)")
 
-            print("-" * 80)
+                print("-" * 80)
 
-            # Send to API if enabled
-            if send_to_api:
-                success = self.send_to_api(metrics)
-                status = "✅ Sent" if success else "❌ Failed"
-                print(f"📤 API: {status}")
-
-            if i < iterations - 1:
+                # Wait for next interval
                 time.sleep(interval)
 
-        print(f"\n✅ Simulation complete! Collected {iterations} data points.")
+        except KeyboardInterrupt:
+            print(f"\n\n{'='*80}")
+            print(f"⚠️  Monitoring stopped by user")
+            print(f"{'='*80}")
+            print(f"📊 Total Collections: {collection_count}")
+            if send_to_api:
+                print(f"✅ Successful Sends: {success_count}")
+                print(f"❌ Failed Sends: {fail_count}")
+                success_rate = (success_count / collection_count * 100) if collection_count > 0 else 0
+                print(f"📈 Success Rate: {success_rate:.1f}%")
+            print(f"{'='*80}\n")
 
     def export_sample_json(self, filename: str = "sample_metrics.json"):
         """Export a single metrics collection as JSON for testing."""
@@ -180,27 +353,34 @@ def main():
     """Main entry point for the device agent."""
     print("""
     ╔═══════════════════════════════════════════════════════════╗
-    ║     Dynamic Carbon Profiling - Device Agent v2.0         ║
-    ║     Location-Aware Carbon Monitoring System              ║
+    ║     Dynamic Carbon Profiling - Device Agent v3.0         ║
+    ║     Persistent ID & Auto-Config Support                  ║
     ╚═══════════════════════════════════════════════════════════╝
     """)
 
-    # Create agent instance (location detection happens here)
+    # Create agent instance (auto-detects everything)
     agent = DeviceAgent()
 
     # Export a sample for inspection
+    print("\n📝 Exporting sample metrics...")
     agent.export_sample_json()
+    print("✅ Sample exported to sample_metrics.json\n")
 
-    print("\nStarting live monitoring...\n")
+    # Check if API mode should be enabled
+    # Default to TRUE now - user doesn't need to set environment variable
+    send_to_api_env = os.environ.get('SEND_TO_API', 'true').lower()
+    send_to_api = send_to_api_env in ('true', '1', 'yes', 'y')
 
-    # Check if API mode is enabled
-    send_to_api = os.environ.get('SEND_TO_API', 'false').lower() == 'true'
+    if not send_to_api:
+        print("ℹ️  Running in LOCAL MODE (set SEND_TO_API=true to enable API)")
 
-    # Run simulation
+    # Run continuous monitoring
     try:
-        agent.simulate_and_print(interval=5, duration=30, send_to_api=send_to_api)
-    except KeyboardInterrupt:
-        print("\n\n⚠️  Monitoring stopped by user")
+        agent.run_continuous(interval=5, send_to_api=send_to_api)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

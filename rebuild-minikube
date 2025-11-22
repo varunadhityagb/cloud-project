@@ -1,0 +1,15 @@
+#!/bin/bash
+
+minikube delete
+
+minikube start --driver=docker
+
+eval $(minikube docker-env)
+
+docker build -t carbon-ingestion-api:latest -f profiling-engine/Dockerfile profiling-engine/
+
+docker build -t carbon-profiler-worker:latest -f profiling-worker/Dockerfile profiling-worker/
+
+docker build -t carbon-dashboard:latest -f dashboard/Dockerfile dashboard/
+
+kubectl apply -f k8s-manifests/all-in-one.yaml

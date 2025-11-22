@@ -1,12 +1,20 @@
 {
-  "device_id": "device_8068",
+  "device_id": "device_6638",
   "device_type": "laptop",
-  "timestamp": "2025-11-12T11:09:17.558400+00:00",
+  "timestamp": "2025-11-22T10:02:41.951776+00:00",
+  "location": {
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "city": "Bengaluru",
+    "region": "Karnataka",
+    "country": "India",
+    "country_code": "IN"
+  },
   "system_metrics": {
-    "cpu_percent": 11.1,
-    "memory_percent": 57.8,
-    "total_power_watts": 12.11,
-    "cpu_count": 16
+    "cpu_percent": 8.6,
+    "memory_percent": 44.1,
+    "total_power_watts": 11.18,
+    "cpu_count": 8
   },
   "applications": []
 }

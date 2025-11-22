@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone
 import json
@@ -26,32 +25,49 @@ def init_database():
         try:
             conn = get_db_connection()
             cur = conn.cursor()
+
+            # Main metrics table with location
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS device_metrics (
                     id SERIAL PRIMARY KEY,
                     device_id VARCHAR(100) NOT NULL,
                     device_type VARCHAR(50),
                     timestamp TIMESTAMP NOT NULL,
+
+                    -- Location data
+                    latitude FLOAT,
+                    longitude FLOAT,
+                    city VARCHAR(100),
+                    region VARCHAR(100),
+                    country VARCHAR(100),
+                    country_code VARCHAR(10),
+
+                    -- System metrics
                     cpu_percent FLOAT,
                     memory_percent FLOAT,
                     total_power_watts FLOAT,
                     cpu_count INTEGER,
                     applications JSONB,
+
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
+
             cur.execute("CREATE INDEX IF NOT EXISTS idx_device_id ON device_metrics(device_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON device_metrics(timestamp)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_location ON device_metrics(latitude, longitude)")
+
             conn.commit()
             cur.close()
             conn.close()
-            print("Database initialized successfully")
+            print("✅ Database initialized successfully")
             return
         except Exception as e:
             if attempt < max_retries - 1:
-                print(f"Waiting for database... ({attempt + 1}/{max_retries})")
+                print(f"⏳ Waiting for database... ({attempt + 1}/{max_retries})")
                 time.sleep(3)
             else:
-                print(f"Failed to connect: {e}")
+                print(f"❌ Failed to connect: {e}")
                 raise
 
 init_database()
@@ -64,7 +80,7 @@ def health_check():
         db_status = "healthy"
     except Exception as e:
         db_status = f"error: {str(e)}"
-    
+
     return jsonify({
         "status": "healthy" if db_status == "healthy" else "degraded",
         "database": db_status,
@@ -78,19 +94,27 @@ def ingest_metrics():
         device_id = data['device_id']
         system_metrics = data['system_metrics']
         applications = data.get('applications', [])
-        
+        location = data.get('location', {})
+
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO device_metrics 
-            (device_id, device_type, timestamp, cpu_percent, memory_percent, 
-             total_power_watts, cpu_count, applications)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO device_metrics
+            (device_id, device_type, timestamp,
+             latitude, longitude, city, region, country, country_code,
+             cpu_percent, memory_percent, total_power_watts, cpu_count, applications)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             device_id,
             data.get('device_type', 'laptop'),
             data['timestamp'],
+            location.get('latitude'),
+            location.get('longitude'),
+            location.get('city'),
+            location.get('region'),
+            location.get('country'),
+            location.get('country_code'),
             system_metrics.get('cpu_percent'),
             system_metrics.get('memory_percent'),
             system_metrics.get('total_power_watts'),
@@ -101,7 +125,7 @@ def ingest_metrics():
         conn.commit()
         cur.close()
         conn.close()
-        
+
         return jsonify({"status": "accepted", "record_id": record_id}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -112,19 +136,21 @@ def get_stats():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("""
-            SELECT 
+            SELECT
                 COUNT(*) as total_records,
                 COUNT(DISTINCT device_id) as unique_devices,
-                COALESCE(AVG(total_power_watts), 0) as avg_power
+                COALESCE(AVG(total_power_watts), 0) as avg_power,
+                COUNT(DISTINCT city) as unique_cities
             FROM device_metrics
         """)
         stats = cur.fetchone()
         cur.close()
         conn.close()
-        
+
         return jsonify({
             "total_records": stats['total_records'],
             "unique_devices": stats['unique_devices'],
+            "unique_cities": stats['unique_cities'],
             "average_power_watts": round(float(stats['avg_power']), 2)
         }), 200
     except Exception as e:
@@ -136,9 +162,9 @@ def carbon_summary():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         cur.execute("""
-            SELECT 
+            SELECT
                 COUNT(*) as total_measurements,
                 SUM(operational_carbon_gco2) as total_operational_g,
                 SUM(embodied_carbon_gco2) as total_embodied_g,
@@ -148,19 +174,18 @@ def carbon_summary():
                 COUNT(DISTINCT device_id) as unique_devices
             FROM carbon_footprints
         """)
-        
+
         summary = cur.fetchone()
         cur.close()
         conn.close()
-        
+
         total_operational = float(summary['total_operational_g'] or 0)
         total_embodied = float(summary['total_embodied_g'] or 0)
         total_carbon = float(summary['total_carbon_g'] or 0)
-        
-        # Calculate percentages
+
         operational_pct = (total_operational / total_carbon * 100) if total_carbon > 0 else 0
         embodied_pct = (total_embodied / total_carbon * 100) if total_carbon > 0 else 0
-        
+
         return jsonify({
             "total_measurements": summary['total_measurements'],
             "operational_carbon_grams": round(total_operational, 4),
@@ -182,9 +207,9 @@ def carbon_by_device():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         cur.execute("""
-            SELECT 
+            SELECT
                 device_id,
                 device_type,
                 COUNT(*) as measurement_count,
@@ -198,17 +223,17 @@ def carbon_by_device():
             GROUP BY device_id, device_type
             ORDER BY total_carbon_g DESC
         """)
-        
+
         devices = cur.fetchall()
         cur.close()
         conn.close()
-        
+
         result = []
         for device in devices:
             total_carbon = float(device['total_carbon_g'])
             total_operational = float(device['total_operational_g'])
             total_embodied = float(device['total_embodied_g'])
-            
+
             result.append({
                 "device_id": device['device_id'],
                 "device_type": device['device_type'],
@@ -221,7 +246,7 @@ def carbon_by_device():
                 "first_seen": device['first_seen'].isoformat(),
                 "last_seen": device['last_seen'].isoformat()
             })
-        
+
         return jsonify({"devices": result, "total_devices": len(result)}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -232,9 +257,9 @@ def carbon_by_hour():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         cur.execute("""
-            SELECT 
+            SELECT
                 EXTRACT(HOUR FROM timestamp) as hour,
                 COUNT(*) as measurement_count,
                 AVG(grid_intensity_gco2_per_kwh) as avg_grid_intensity,
@@ -245,11 +270,11 @@ def carbon_by_hour():
             GROUP BY EXTRACT(HOUR FROM timestamp)
             ORDER BY hour
         """)
-        
+
         hours = cur.fetchall()
         cur.close()
         conn.close()
-        
+
         result = []
         for hour_data in hours:
             result.append({
@@ -260,7 +285,7 @@ def carbon_by_hour():
                 "embodied_carbon_grams": round(float(hour_data['total_embodied_g']), 4),
                 "total_carbon_grams": round(float(hour_data['total_carbon_g']), 4)
             })
-        
+
         return jsonify({"hourly_breakdown": result}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -270,12 +295,12 @@ def carbon_device_detail(device_id: str):
     """Get detailed carbon footprint for a specific device."""
     try:
         limit = request.args.get('limit', type=int, default=50)
-        
+
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         cur.execute("""
-            SELECT 
+            SELECT
                 timestamp,
                 power_kwh,
                 grid_intensity_gco2_per_kwh,
@@ -288,14 +313,14 @@ def carbon_device_detail(device_id: str):
             ORDER BY timestamp DESC
             LIMIT %s
         """, (device_id, limit))
-        
+
         records = cur.fetchall()
         cur.close()
         conn.close()
-        
+
         if not records:
             return jsonify({"error": f"No carbon data for device {device_id}"}), 404
-        
+
         result = []
         for record in records:
             result.append({
@@ -307,7 +332,7 @@ def carbon_device_detail(device_id: str):
                 "total_carbon_gco2": float(record['total_carbon_gco2']),
                 "calculated_at": record['calculated_at'].isoformat()
             })
-        
+
         return jsonify({
             "device_id": device_id,
             "record_count": len(result),
@@ -322,12 +347,14 @@ def list_devices():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("""
-            SELECT 
+            SELECT
                 device_id,
+                city,
+                country,
                 COUNT(*) as record_count,
                 MAX(timestamp) as last_seen
             FROM device_metrics
-            GROUP BY device_id
+            GROUP BY device_id, city, country
         """)
         devices = cur.fetchall()
         cur.close()

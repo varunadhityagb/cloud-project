@@ -666,7 +666,7 @@ class GPUDetector:
                     text=True
                 )
             except subprocess.CalledProcessError:
-                pass
+                return 5.0
 
             busy_ns = None
             elapsed_s = None

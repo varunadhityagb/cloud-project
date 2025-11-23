@@ -10,6 +10,7 @@ app = Flask(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
 API_BASE_URL = os.environ.get('API_URL', 'http://ingestion-api-service:5000')
+# API_BASE_URL = os.environ.get('API_URL', 'http://localhost:5000')
 
 @app.route('/')
 def index():

@@ -1,8 +1,13 @@
 from flask import Flask, render_template, jsonify
 import requests
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
+
+# Indian Standard Time
+IST = ZoneInfo("Asia/Kolkata")
 
 API_BASE_URL = os.environ.get('API_URL', 'http://ingestion-api-service:5000')
 
@@ -13,7 +18,7 @@ def index():
 
 @app.route('/api/dashboard/summary')
 def dashboard_summary():
-    """Aggregate data for carbon-aware dashboard."""
+    """Aggregate data for carbon-aware dashboard with IST timezone."""
     try:
         # Fetch data from ingestion API
         carbon_summary = requests.get(f'{API_BASE_URL}/api/v1/carbon/summary').json()
@@ -25,14 +30,16 @@ def dashboard_summary():
             'carbon_summary': carbon_summary,
             'by_device': by_device,
             'by_hour': by_hour,
-            'system_stats': stats
+            'system_stats': stats,
+            'timezone': 'Asia/Kolkata (IST)',
+            'current_time': datetime.now(IST).strftime('%H:%M:%S IST')
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/carbon-aware/recommendations')
 def carbon_recommendations():
-    """Get carbon-aware scheduling recommendations."""
+    """Get carbon-aware scheduling recommendations (IST timezone)."""
     try:
         by_hour = requests.get(f'{API_BASE_URL}/api/v1/carbon/by-hour').json()
 
@@ -52,9 +59,8 @@ def carbon_recommendations():
         greenest_hours = sorted_hours[:3]
         dirtiest_hours = sorted_hours[-3:]
 
-        # Current hour analysis
-        from datetime import datetime
-        current_hour = datetime.now().hour
+        # Current hour analysis (IST)
+        current_hour = datetime.now(IST).hour
         current_hour_data = next((h for h in hourly_data if h['hour'] == current_hour), None)
 
         if current_hour_data:
@@ -71,6 +77,7 @@ def carbon_recommendations():
 
         return jsonify({
             'current_hour': current_hour,
+            'current_time_ist': datetime.now(IST).strftime('%H:%M:%S IST'),
             'current_intensity': current_intensity,
             'average_intensity': avg_intensity,
             'min_intensity': min_intensity,
@@ -91,7 +98,8 @@ def carbon_recommendations():
                 } for h in dirtiest_hours
             ],
             'potential_savings_percent': potential_savings,
-            'recommendation': get_recommendation(percent_diff, greenest_hours[0]['hour'], current_hour)
+            'recommendation': get_recommendation(percent_diff, greenest_hours[0]['hour'], current_hour),
+            'timezone': 'Asia/Kolkata (IST)'
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

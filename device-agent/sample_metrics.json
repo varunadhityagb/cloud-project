@@ -1,7 +1,7 @@
 {
   "device_id": "device_62109b02",
   "device_type": "laptop",
-  "timestamp": "2025-11-22T14:16:01.943427+00:00",
+  "timestamp": "2025-11-23T09:53:06.714050+05:30",
   "location": {
     "latitude": 12.9716,
     "longitude": 77.5946,
@@ -11,10 +11,24 @@
     "country_code": "IN"
   },
   "system_metrics": {
-    "cpu_percent": 5.1,
-    "memory_percent": 37.6,
-    "total_power_watts": 9.02,
-    "cpu_count": 8
+    "cpu_percent": 5.0,
+    "memory_percent": 45.4,
+    "cpu_power_watts": 9.0,
+    "gpu_power_watts": 4.1,
+    "total_power_watts": 13.1,
+    "cpu_count": 8,
+    "gpu_count": 1
   },
+  "gpu_details": [
+    {
+      "index": 0,
+      "name": "Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics] (rev 01)",
+      "vendor": "Intel",
+      "utilization": 5.0,
+      "power_watts": 4.1,
+      "tdp": 25,
+      "idle": 3
+    }
+  ],
   "applications": []
 }

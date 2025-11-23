@@ -3,8 +3,12 @@ from psycopg2.extras import RealDictCursor
 import time
 import os
 import requests
-from datetime import datetime, timezone
-from typing import Optional, Tuple
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from typing import Optional
+
+# Indian Standard Time
+IST = ZoneInfo("Asia/Kolkata")
 
 DB_CONFIG = {
     'host': os.environ.get('DB_HOST', 'postgres-service'),
@@ -54,9 +58,12 @@ def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 def init_carbon_table():
-    """Create table for carbon footprint results."""
+    """Create table for carbon footprint results with IST timezone."""
     conn = get_db_connection()
     cur = conn.cursor()
+
+    # Set timezone to IST
+    cur.execute("SET timezone = 'Asia/Kolkata'")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS carbon_footprints (
@@ -64,7 +71,7 @@ def init_carbon_table():
             device_id VARCHAR(100) NOT NULL,
             device_type VARCHAR(50),
             metric_id INTEGER REFERENCES device_metrics(id),
-            timestamp TIMESTAMP NOT NULL,
+            timestamp TIMESTAMPTZ NOT NULL,
 
             -- Location (for reference)
             latitude FLOAT,
@@ -83,7 +90,7 @@ def init_carbon_table():
             -- Total emissions
             total_carbon_gco2 FLOAT NOT NULL,
 
-            calculated_at TIMESTAMP DEFAULT NOW()
+            calculated_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
 
@@ -100,7 +107,7 @@ def init_carbon_table():
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Carbon footprint table initialized")
+    print("Carbon footprint table initialized (Timezone: Asia/Kolkata)")
 
 def fetch_grid_intensity_by_location(lat: float, lon: float) -> Optional[float]:
     """
@@ -186,7 +193,7 @@ def get_grid_intensity_with_cache(lat: float, lon: float, country_code: str = No
             country_code,
             FALLBACK_GRID_INTENSITY['default']
         )
-        print(f"⚠️  Using fallback intensity: {fallback} gCO2/kWh ({country_code or 'default'})")
+        print(f"Using fallback intensity: {fallback} gCO2/kWh ({country_code or 'default'})")
         return fallback
 
 def calculate_embodied_carbon_per_measurement(device_type: str, measurement_interval_seconds: int = 5) -> float:
@@ -201,9 +208,12 @@ def calculate_embodied_carbon_per_measurement(device_type: str, measurement_inte
     return embodied_per_measurement_g
 
 def process_unprocessed_metrics():
-    """Find and process metrics that haven't been profiled yet."""
+    """Find and process metrics that haven't been profiled yet (IST timezone)."""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Set timezone to IST
+    cur.execute("SET timezone = 'Asia/Kolkata'")
 
     # Find unprocessed metrics WITH location data
     cur.execute("""
@@ -242,7 +252,7 @@ def process_unprocessed_metrics():
                 country_code,
                 FALLBACK_GRID_INTENSITY['default']
             )
-            print(f"⚠️  No location for metric {metric['id']}, using fallback: {grid_intensity}")
+            print(f"No location for metric {metric['id']}, using fallback: {grid_intensity}")
 
         # === OPERATIONAL CARBON ===
         power_kwh = (metric['total_power_watts'] * 5) / (1000 * 3600)
@@ -260,7 +270,7 @@ def process_unprocessed_metrics():
         # === TOTAL CARBON ===
         total_carbon_gco2 = operational_carbon_gco2 + embodied_carbon_gco2
 
-        # Store the result
+        # Store the result (timestamp will be stored in IST)
         cur.execute("""
             INSERT INTO carbon_footprints
             (device_id, device_type, metric_id, timestamp,
@@ -292,24 +302,26 @@ def process_unprocessed_metrics():
     cur.close()
     conn.close()
 
-    print(f"✅ Processed {processed_count} metrics")
+    ist_time = datetime.now(IST).strftime('%H:%M:%S IST')
+    print(f"Processed {processed_count} metrics at {ist_time}")
     return processed_count
 
 def main():
     """Main worker loop."""
     print("=" * 60)
-    print("🌱 Carbon Profiling Worker Starting")
+    print("🌱 Carbon Profiling Worker Starting (IST Timezone)")
     print("=" * 60)
 
     # Configuration status
     if ELECTRICITY_MAPS_TOKEN:
-        print("✅ Electricity Maps API: ENABLED (location-based)")
+        print("Electricity Maps API: ENABLED (location-based)")
     else:
-        print("⚠️  Electricity Maps API: DISABLED (using regional fallbacks)")
+        print("Electricity Maps API: DISABLED (using regional fallbacks)")
 
-    print(f"📊 Embodied carbon values: {EMBODIED_CARBON_KG}")
-    print(f"⏳ Expected lifetimes: {EXPECTED_LIFETIME_YEARS}")
-    print(f"📍 Fallback intensities: {FALLBACK_GRID_INTENSITY}")
+    print(f"Embodied carbon values: {EMBODIED_CARBON_KG}")
+    print(f"Expected lifetimes: {EXPECTED_LIFETIME_YEARS}")
+    print(f"Fallback intensities: {FALLBACK_GRID_INTENSITY}")
+    print(f"Timezone: Asia/Kolkata (IST)")
     print("=" * 60)
 
     # Wait for database
@@ -319,11 +331,11 @@ def main():
     try:
         init_carbon_table()
     except Exception as e:
-        print(f"❌ Error initializing: {e}")
+        print(f"Error initializing: {e}")
         time.sleep(10)
         return
 
-    print("\n🔄 Starting processing loop...\n")
+    print(f"\n🚀 Starting processing loop at {datetime.now(IST).strftime('%H:%M:%S IST')}...\n")
 
     # Process loop
     while True:
@@ -331,10 +343,10 @@ def main():
             process_unprocessed_metrics()
             time.sleep(10)
         except KeyboardInterrupt:
-            print("\n⚠️  Worker stopped by user")
+            print("\n Worker stopped by user")
             break
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
             time.sleep(10)
 
 if __name__ == "__main__":

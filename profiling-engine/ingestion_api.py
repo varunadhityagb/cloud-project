@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import json
 import os
 import psycopg2
@@ -7,6 +8,9 @@ from psycopg2.extras import RealDictCursor
 import time
 
 app = Flask(__name__)
+
+# Indian Standard Time
+IST = ZoneInfo("Asia/Kolkata")
 
 DB_CONFIG = {
     'host': os.environ.get('DB_HOST', 'postgres-service'),
@@ -26,13 +30,16 @@ def init_database():
             conn = get_db_connection()
             cur = conn.cursor()
 
+            # Set timezone to IST for this connection
+            cur.execute("SET timezone = 'Asia/Kolkata'")
+
             # Main metrics table with location
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS device_metrics (
                     id SERIAL PRIMARY KEY,
                     device_id VARCHAR(100) NOT NULL,
                     device_type VARCHAR(50),
-                    timestamp TIMESTAMP NOT NULL,
+                    timestamp TIMESTAMPTZ NOT NULL,
 
                     -- Location data
                     latitude FLOAT,
@@ -49,7 +56,7 @@ def init_database():
                     cpu_count INTEGER,
                     applications JSONB,
 
-                    created_at TIMESTAMP DEFAULT NOW()
+                    created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
 
@@ -60,14 +67,14 @@ def init_database():
             conn.commit()
             cur.close()
             conn.close()
-            print("✅ Database initialized successfully")
+            print("Database initialized successfully (Timezone: Asia/Kolkata)")
             return
         except Exception as e:
             if attempt < max_retries - 1:
                 print(f"⏳ Waiting for database... ({attempt + 1}/{max_retries})")
                 time.sleep(3)
             else:
-                print(f"❌ Failed to connect: {e}")
+                print(f"Failed to connect: {e}")
                 raise
 
 init_database()
@@ -76,15 +83,22 @@ init_database()
 def health_check():
     try:
         conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SET timezone = 'Asia/Kolkata'")
+        cur.execute("SHOW timezone")
+        db_timezone = cur.fetchone()[0]
+        cur.close()
         conn.close()
         db_status = "healthy"
     except Exception as e:
         db_status = f"error: {str(e)}"
+        db_timezone = "unknown"
 
     return jsonify({
         "status": "healthy" if db_status == "healthy" else "degraded",
         "database": db_status,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timezone": db_timezone,
+        "timestamp": datetime.now(IST).isoformat()
     }), 200
 
 @app.route('/api/v1/metrics/ingest', methods=['POST'])
@@ -96,8 +110,19 @@ def ingest_metrics():
         applications = data.get('applications', [])
         location = data.get('location', {})
 
+        # Parse timestamp - handle both with/without timezone
+        timestamp_str = data['timestamp']
+        if '+' in timestamp_str or 'Z' in timestamp_str:
+            # Already has timezone
+            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        else:
+            # Assume IST
+            timestamp = datetime.fromisoformat(timestamp_str).replace(tzinfo=IST)
+
         conn = get_db_connection()
         cur = conn.cursor()
+        cur.execute("SET timezone = 'Asia/Kolkata'")
+
         cur.execute("""
             INSERT INTO device_metrics
             (device_id, device_type, timestamp,
@@ -108,7 +133,7 @@ def ingest_metrics():
         """, (
             device_id,
             data.get('device_type', 'laptop'),
-            data['timestamp'],
+            timestamp,
             location.get('latitude'),
             location.get('longitude'),
             location.get('city'),
@@ -135,6 +160,8 @@ def get_stats():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
+
         cur.execute("""
             SELECT
                 COUNT(*) as total_records,
@@ -151,7 +178,8 @@ def get_stats():
             "total_records": stats['total_records'],
             "unique_devices": stats['unique_devices'],
             "unique_cities": stats['unique_cities'],
-            "average_power_watts": round(float(stats['avg_power']), 2)
+            "average_power_watts": round(float(stats['avg_power']), 2),
+            "timezone": "Asia/Kolkata (IST)"
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -162,6 +190,7 @@ def carbon_summary():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
 
         cur.execute("""
             SELECT
@@ -196,7 +225,8 @@ def carbon_summary():
             "embodied_percentage": round(embodied_pct, 2),
             "avg_carbon_per_measurement_g": round(float(summary['avg_carbon_per_measurement'] or 0), 6),
             "total_energy_kwh": round(float(summary['total_energy_kwh'] or 0), 6),
-            "unique_devices": summary['unique_devices']
+            "unique_devices": summary['unique_devices'],
+            "timezone": "Asia/Kolkata (IST)"
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -207,6 +237,7 @@ def carbon_by_device():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
 
         cur.execute("""
             SELECT
@@ -247,27 +278,32 @@ def carbon_by_device():
                 "last_seen": device['last_seen'].isoformat()
             })
 
-        return jsonify({"devices": result, "total_devices": len(result)}), 200
+        return jsonify({
+            "devices": result,
+            "total_devices": len(result),
+            "timezone": "Asia/Kolkata (IST)"
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/v1/carbon/by-hour', methods=['GET'])
 def carbon_by_hour():
-    """Get carbon footprint by hour with embodied carbon breakdown."""
+    """Get carbon footprint by hour with embodied carbon breakdown (IST timezone)."""
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
 
         cur.execute("""
             SELECT
-                EXTRACT(HOUR FROM timestamp) as hour,
+                EXTRACT(HOUR FROM timestamp AT TIME ZONE 'Asia/Kolkata') as hour,
                 COUNT(*) as measurement_count,
                 AVG(grid_intensity_gco2_per_kwh) as avg_grid_intensity,
                 SUM(operational_carbon_gco2) as total_operational_g,
                 SUM(embodied_carbon_gco2) as total_embodied_g,
                 SUM(total_carbon_gco2) as total_carbon_g
             FROM carbon_footprints
-            GROUP BY EXTRACT(HOUR FROM timestamp)
+            GROUP BY EXTRACT(HOUR FROM timestamp AT TIME ZONE 'Asia/Kolkata')
             ORDER BY hour
         """)
 
@@ -286,7 +322,10 @@ def carbon_by_hour():
                 "total_carbon_grams": round(float(hour_data['total_carbon_g']), 4)
             })
 
-        return jsonify({"hourly_breakdown": result}), 200
+        return jsonify({
+            "hourly_breakdown": result,
+            "timezone": "Asia/Kolkata (IST)"
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -298,6 +337,7 @@ def carbon_device_detail(device_id: str):
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
 
         cur.execute("""
             SELECT
@@ -336,7 +376,8 @@ def carbon_device_detail(device_id: str):
         return jsonify({
             "device_id": device_id,
             "record_count": len(result),
-            "measurements": result
+            "measurements": result,
+            "timezone": "Asia/Kolkata (IST)"
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -346,6 +387,8 @@ def list_devices():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
+
         cur.execute("""
             SELECT
                 device_id,
@@ -359,7 +402,17 @@ def list_devices():
         devices = cur.fetchall()
         cur.close()
         conn.close()
-        return jsonify({"devices": devices, "total": len(devices)}), 200
+
+        # Convert timestamps to IST
+        for device in devices:
+            if device['last_seen']:
+                device['last_seen'] = device['last_seen'].isoformat()
+
+        return jsonify({
+            "devices": devices,
+            "total": len(devices),
+            "timezone": "Asia/Kolkata (IST)"
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

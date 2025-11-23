@@ -44,6 +44,10 @@ spec:
           value: "carbon_pass_123"
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
+        - name: TZ
+          value: "Asia/Kolkata"
+        - name: PGTZ
+          value: "Asia/Kolkata"
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
@@ -93,6 +97,10 @@ spec:
           value: "carbon_pass_123"
         - name: DB_NAME
           value: "carbon_metrics"
+        - name: APP_TIMEZONE
+          value: "Asia/Kolkata"
+        - name: TZ
+          value: "Asia/Kolkata"
         readinessProbe:
           httpGet:
             path: /health
@@ -143,6 +151,10 @@ spec:
           value: "carbon_metrics"
         - name: ELECTRICITY_MAPS_TOKEN
           value: "VP6Y7A1RYiYyfjDAHCJL"
+        - name: APP_TIMEZONE
+          value: "Asia/Kolkata"
+        - name: TZ
+          value: "Asia/Kolkata"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -168,6 +180,10 @@ spec:
         env:
         - name: API_URL
           value: "http://ingestion-api-service:5000"
+        - name: APP_TIMEZONE
+          value: "Asia/Kolkata"
+        - name: TZ
+          value: "Asia/Kolkata"
 ---
 apiVersion: v1
 kind: Service

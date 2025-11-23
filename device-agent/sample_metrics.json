@@ -1,7 +1,7 @@
 {
   "device_id": "device_62109b02",
   "device_type": "laptop",
-  "timestamp": "2025-11-23T09:53:06.714050+05:30",
+  "timestamp": "2025-11-23T10:59:03.253866+05:30",
   "location": {
     "latitude": 12.9716,
     "longitude": 77.5946,
@@ -11,11 +11,11 @@
     "country_code": "IN"
   },
   "system_metrics": {
-    "cpu_percent": 5.0,
-    "memory_percent": 45.4,
-    "cpu_power_watts": 9.0,
+    "cpu_percent": 5.7,
+    "memory_percent": 48.7,
+    "cpu_power_watts": 9.14,
     "gpu_power_watts": 4.1,
-    "total_power_watts": 13.1,
+    "total_power_watts": 13.24,
     "cpu_count": 8,
     "gpu_count": 1
   },

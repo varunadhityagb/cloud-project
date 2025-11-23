@@ -1,0 +1,199 @@
+#!/bin/bash
+
+# Rebuild Minikube deployments while preserving PostgreSQL data
+# This script only rebuilds application containers, not the database
+
+set -e
+
+echo "════════════════════════════════════════════════════════════════"
+echo "   Rebuild Carbon Profiling System (Preserve Database)"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+NAMESPACE="carbon-profiling"
+
+# Function to check if namespace exists
+namespace_exists() {
+    kubectl get namespace "$NAMESPACE" &>/dev/null
+}
+
+# Function to check if PostgreSQL has data
+postgres_has_data() {
+    POD=$(kubectl get pods -n "$NAMESPACE" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    
+    if [ -z "$POD" ]; then
+        return 1
+    fi
+    
+    # Check if database has tables
+    RESULT=$(kubectl exec -n "$NAMESPACE" "$POD" -- psql -U carbon_user -d carbon_metrics -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null || echo "0")
+    
+    if [ "$RESULT" -gt 0 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check if namespace exists
+if namespace_exists; then
+    echo "✅ Namespace '$NAMESPACE' exists"
+    
+    # Check if PostgreSQL has data
+    if postgres_has_data; then
+        echo "📊 PostgreSQL database has existing data"
+        echo ""
+        echo "⚠️  WARNING: This will rebuild application containers but keep the database."
+        echo "   Your existing data will be preserved."
+        echo ""
+        read -p "Continue? (y/n): " -n 1 -r
+        echo ""
+        
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Cancelled."
+            exit 0
+        fi
+        
+        PRESERVE_DB=true
+    else
+        echo "ℹ️  PostgreSQL database is empty or doesn't exist"
+        PRESERVE_DB=false
+    fi
+else
+    echo "ℹ️  Namespace doesn't exist - will create fresh deployment"
+    PRESERVE_DB=false
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "Step 1: Configure Minikube Docker Environment"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+eval $(minikube docker-env)
+echo "✅ Using Minikube's Docker daemon"
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "Step 2: Build Application Docker Images"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+echo "🔨 Building Ingestion API image..."
+docker build -t carbon-ingestion-api:latest -f profiling-engine/Dockerfile profiling-engine/
+echo "✅ Ingestion API image built"
+echo ""
+
+echo "🔨 Building Carbon Profiler Worker image..."
+docker build -t carbon-profiler-worker:latest -f profiling-worker/Dockerfile profiling-worker/
+echo "✅ Profiler Worker image built"
+echo ""
+
+echo "🔨 Building Dashboard image..."
+docker build -t carbon-dashboard:latest -f dashboard/Dockerfile dashboard/
+echo "✅ Dashboard image built"
+echo ""
+
+echo "════════════════════════════════════════════════════════════════"
+echo "Step 3: Update Kubernetes Deployments"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+if [ "$PRESERVE_DB" = true ]; then
+    echo "📦 Updating application deployments (preserving database)..."
+    echo ""
+    
+    # Delete only application deployments, not StatefulSet or PVC
+    echo "🔄 Restarting Ingestion API..."
+    kubectl delete deployment ingestion-api -n "$NAMESPACE" --ignore-not-found=true
+    kubectl apply -f k8s-manifests/all-in-one.yaml
+    
+    echo "🔄 Restarting Carbon Profiler Worker..."
+    kubectl delete deployment carbon-profiler -n "$NAMESPACE" --ignore-not-found=true
+    kubectl apply -f k8s-manifests/all-in-one.yaml
+    
+    echo "🔄 Restarting Dashboard..."
+    kubectl delete deployment dashboard -n "$NAMESPACE" --ignore-not-found=true
+    kubectl apply -f k8s-manifests/all-in-one.yaml
+    
+    echo ""
+    echo "✅ Application containers updated"
+    echo "✅ PostgreSQL StatefulSet and data preserved"
+else
+    echo "📦 Deploying fresh installation..."
+    kubectl apply -f k8s-manifests/all-in-one.yaml
+    echo "✅ All resources created"
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "Step 4: Wait for Pods to be Ready"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+echo "⏳ Waiting for PostgreSQL..."
+kubectl wait --for=condition=ready pod -l app=postgres -n "$NAMESPACE" --timeout=120s || true
+
+echo "⏳ Waiting for Ingestion API..."
+kubectl wait --for=condition=ready pod -l app=ingestion-api -n "$NAMESPACE" --timeout=120s || true
+
+echo "⏳ Waiting for Carbon Profiler Worker..."
+kubectl wait --for=condition=ready pod -l app=carbon-profiler -n "$NAMESPACE" --timeout=120s || true
+
+echo "⏳ Waiting for Dashboard..."
+kubectl wait --for=condition=ready pod -l app=dashboard -n "$NAMESPACE" --timeout=120s || true
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "✅ Rebuild Complete!"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+# Show pod status
+echo "📊 Current Pod Status:"
+kubectl get pods -n "$NAMESPACE"
+echo ""
+
+# Get service URLs
+API_URL=$(minikube service ingestion-api-service -n "$NAMESPACE" --url 2>/dev/null | head -n 1)
+DASHBOARD_URL=$(minikube service dashboard-service -n "$NAMESPACE" --url 2>/dev/null | head -n 1)
+
+echo "🌐 Service URLs:"
+echo "   Ingestion API: $API_URL"
+echo "   Dashboard:     $DASHBOARD_URL"
+echo ""
+
+if [ "$PRESERVE_DB" = true ]; then
+    echo "💾 Database Status: PRESERVED"
+    echo "   Your existing data is intact"
+    
+    # Check record count
+    POD=$(kubectl get pods -n "$NAMESPACE" -l app=postgres -o jsonpath='{.items[0].metadata.name}')
+    RECORD_COUNT=$(kubectl exec -n "$NAMESPACE" "$POD" -- psql -U carbon_user -d carbon_metrics -t -c "SELECT COUNT(*) FROM device_metrics;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    CARBON_COUNT=$(kubectl exec -n "$NAMESPACE" "$POD" -- psql -U carbon_user -d carbon_metrics -t -c "SELECT COUNT(*) FROM carbon_footprints;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    
+    echo "   Device Metrics: $RECORD_COUNT records"
+    echo "   Carbon Footprints: $CARBON_COUNT records"
+else
+    echo "💾 Database Status: NEW"
+    echo "   Fresh database initialized"
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "Next Steps:"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+echo "1. Verify system health:"
+echo "   ./verify-endpoints.sh"
+echo ""
+echo "2. Start collecting data:"
+echo "   cd device-agent"
+echo "   export API_ENDPOINT=\"$API_URL\""
+echo "   export SEND_TO_API=true"
+echo "   python device_agent.py"
+echo ""
+echo "3. View dashboard:"
+echo "   Open in browser: $DASHBOARD_URL"
+echo ""
+echo "════════════════════════════════════════════════════════════════"

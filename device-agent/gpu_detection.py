@@ -657,8 +657,38 @@ class GPUDetector:
                                 return float(match.group(1))
             except:
                 pass
-        
-        # Fallback - assume low utilization
+
+        else:
+            try:
+                out = subprocess.check_output(
+                    ["sudo", "perf", "stat", "-e", "i915/rcs0-busy/", "sleep", "1"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+            except subprocess.CalledProcessError:
+                pass
+
+            busy_ns = None
+            elapsed_s = None
+
+            for line in out.split("\n"):
+                # busy time: e.g. "174,691,871 ns   i915/rcs0-busy/"
+                if "i915/rcs0-busy/" in line:
+                    match = re.search(r'([\d,]+)\s*ns', line)
+                    if match:
+                        busy_ns = int(match.group(1).replace(",", ""))
+
+                # elapsed time: e.g. "1.000895907 seconds time elapsed"
+                if "seconds time elapsed" in line:
+                    match = re.search(r'([\d\.]+)\s*seconds', line)
+                    if match:
+                        elapsed_s = float(match.group(1))
+
+            if busy_ns is not None or elapsed_s is not None:
+                elapsed_ns = elapsed_s * 1e9
+                util = (busy_ns / elapsed_ns) * 100.0
+                return float(f"{util:0.2f}")
+
         return 5.0
 
     def calculate_gpu_power(self, gpu_index: int = 0, utilization: Optional[float] = None) -> float:

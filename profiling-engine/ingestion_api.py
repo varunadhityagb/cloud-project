@@ -1,11 +1,20 @@
 from flask import Flask, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import json
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
+from prophet import Prophet
+import pickle
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import sys
+import warnings
+warnings.filterwarnings('ignore')
+
 
 app = Flask(__name__)
 
@@ -19,6 +28,10 @@ DB_CONFIG = {
     'user': os.environ.get('DB_USER', 'carbon_user'),
     'password': os.environ.get('DB_PASSWORD', 'carbon_pass_123')
 }
+
+ML_MODEL_PATH = Path("./models/grid_prophet.pkl")
+ml_model = None
+ml_model_error = None
 
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
@@ -78,6 +91,76 @@ def init_database():
                 raise
 
 init_database()
+
+
+def load_ml_model():
+    """Load Prophet model if available."""
+    global ml_model, ml_model_error
+
+    if ml_model is not None:
+        return True  # Already loaded
+
+    print(f"🔍 Attempting to load ML model...", file=sys.stderr)
+    print(f"   Path: {ML_MODEL_PATH}", file=sys.stderr)
+    print(f"   Exists: {ML_MODEL_PATH.exists()}", file=sys.stderr)
+    print(f"   Current dir: {Path.cwd()}", file=sys.stderr)
+
+    if ML_MODEL_PATH.exists():
+        try:
+            print("📥 Loading Prophet model...", file=sys.stderr)
+            with open(ML_MODEL_PATH, 'rb') as f:
+                ml_model = pickle.load(f)
+            print("✅ ML prediction model loaded successfully", file=sys.stderr)
+            return True
+        except Exception as e:
+            ml_model_error = str(e)
+            print(f"❌ Failed to load ML model: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            return False
+    else:
+        ml_model_error = f"Model file not found at {ML_MODEL_PATH}"
+        print(f"❌ {ml_model_error}", file=sys.stderr)
+        # List what files ARE there
+        models_dir = Path("/app/models")
+        if models_dir.exists():
+            print(f"   Files in models dir: {list(models_dir.glob('*'))}", file=sys.stderr)
+        return False
+
+def predict_next_24h():
+    """Predict grid intensity for next 24 hours."""
+    global ml_model
+
+    # Lazy load model if not loaded
+    if ml_model is None:
+        load_ml_model()
+
+    if ml_model is None:
+        return None
+
+    try:
+        now = datetime.now(IST).replace(tzinfo=None)
+        future_dates = pd.date_range(start=now, end=now + timedelta(hours=24), freq='H')
+        future = pd.DataFrame({'ds': future_dates})
+
+        forecast = ml_model.predict(future)
+
+        result = []
+        for _, row in forecast.iterrows():
+            result.append({
+                'timestamp': pd.to_datetime(row['ds']).tz_localize(IST).isoformat(),
+                'hour': pd.to_datetime(row['ds']).hour,
+                'predicted_intensity': round(float(row['yhat']), 2),
+                'lower_bound': round(float(row['yhat_lower']), 2),
+                'upper_bound': round(float(row['yhat_upper']), 2)
+            })
+
+        return result
+    except Exception as e:
+        print(f"Prediction error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -416,5 +499,184 @@ def list_devices():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/v1/ml/predict-24h', methods=['GET'])
+def ml_predict_24h():
+    """Get ML predictions for next 24 hours."""
+    # Try to load model
+    load_ml_model()
+
+    if ml_model is None:
+        error_msg = ml_model_error or 'Model not available'
+        print(f"❌ ML endpoint called but model unavailable: {error_msg}", file=sys.stderr)
+        return jsonify({
+            'error': 'ML model not available',
+            'details': error_msg
+        }), 503
+
+    predictions = predict_next_24h()
+    if predictions is None:
+        return jsonify({'error': 'Prediction failed'}), 500
+
+    return jsonify({
+        'predictions': predictions,
+        'model_available': True,
+        'timezone': 'Asia/Kolkata (IST)',
+        'generated_at': datetime.now(IST).isoformat()
+    }), 200
+
+@app.route('/api/v1/ml/greenest-hours', methods=['GET'])
+def ml_greenest_hours():
+    """Get greenest hours from ML predictions."""
+    load_ml_model()
+    if ml_model is None:
+        return jsonify({'error': 'ML model not available'}), 503
+
+    predictions = predict_next_24h()
+    if predictions is None:
+        return jsonify({'error': 'Prediction failed'}), 500
+
+    # Sort by intensity and get top 5
+    sorted_predictions = sorted(predictions, key=lambda x: x['predicted_intensity'])
+    greenest = sorted_predictions[:5]
+
+    return jsonify({
+        'greenest_hours': greenest,
+        'timezone': 'Asia/Kolkata (IST)',
+        'generated_at': datetime.now(IST).isoformat()
+    }), 200
+
+@app.route('/api/v1/ml/recommendation', methods=['GET'])
+def ml_recommendation():
+    """Get smart scheduling recommendation based on predictions."""
+
+    predictions = predict_next_24h()
+    if predictions is None:
+        return jsonify({'error': 'Prediction failed'}), 500
+
+    current_hour = datetime.now(IST).hour
+    current_pred = next((p for p in predictions if p['hour'] == current_hour), predictions[0])
+
+    avg_intensity = sum(p['predicted_intensity'] for p in predictions) / len(predictions)
+    min_intensity = min(p['predicted_intensity'] for p in predictions)
+
+    current_intensity = current_pred['predicted_intensity']
+    percent_vs_avg = ((current_intensity - avg_intensity) / avg_intensity) * 100
+    percent_vs_best = ((current_intensity - min_intensity) / min_intensity) * 100
+
+    # Find greenest hour
+    greenest = min(predictions, key=lambda x: x['predicted_intensity'])
+    hours_until_greenest = (greenest['hour'] - current_hour) % 24
+
+    # Generate recommendation
+    if percent_vs_avg < -15:
+        status = "excellent"
+        message = "Grid is predicted to be much cleaner than average. Excellent time for intensive workloads."
+        action = "Run batch jobs, ML training, large builds now"
+    elif percent_vs_avg < 0:
+        status = "good"
+        message = "Grid is cleaner than average. Good time for most workloads."
+        action = "Normal operations recommended"
+    elif percent_vs_avg < 15:
+        status = "moderate"
+        message = "Grid is slightly dirtier than average. Consider deferring non-urgent tasks."
+        action = f"Wait {hours_until_greenest}h for greenest window"
+    else:
+        status = "poor"
+        message = "Grid is predicted to be much dirtier than average. Defer intensive workloads."
+        action = f"Wait {hours_until_greenest}h for cleanest grid (save {abs(percent_vs_best):.0f}% emissions)"
+
+    return jsonify({
+        'status': status,
+        'current_hour': current_hour,
+        'current_intensity': round(current_intensity, 2),
+        'average_intensity': round(avg_intensity, 2),
+        'best_intensity': round(min_intensity, 2),
+        'percent_vs_average': round(percent_vs_avg, 2),
+        'percent_vs_best': round(percent_vs_best, 2),
+        'message': message,
+        'action': action,
+        'greenest_hour': greenest['hour'],
+        'hours_until_greenest': hours_until_greenest,
+        'timezone': 'Asia/Kolkata (IST)',
+        'generated_at': datetime.now(IST).isoformat()
+    }), 200
+
+@app.route('/api/v1/insights/missed-opportunities', methods=['GET'])
+def missed_opportunities():
+    """Calculate missed carbon savings opportunities."""
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SET timezone = 'Asia/Kolkata'")
+
+        # Get last 24 hours of actual usage
+        cur.execute("""
+            SELECT
+                EXTRACT(HOUR FROM timestamp) as hour,
+                SUM(total_carbon_gco2) as actual_carbon,
+                AVG(grid_intensity_gco2_per_kwh) as actual_intensity,
+                SUM(power_kwh) as total_energy
+            FROM carbon_footprints
+            WHERE timestamp > NOW() - INTERVAL '24 hours'
+            GROUP BY EXTRACT(HOUR FROM timestamp)
+            ORDER BY hour
+        """)
+
+        actual_usage = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not actual_usage:
+            return jsonify({'message': 'Not enough data yet'}), 200
+
+        # Get today's predictions for comparison
+        predictions = predict_next_24h()
+        if not predictions:
+            return jsonify({'error': 'Could not generate predictions'}), 500
+
+        # Calculate missed opportunities
+        opportunities = []
+        total_missed_savings = 0
+
+        for usage in actual_usage:
+            hour = int(usage['hour'])
+            actual_carbon = float(usage['actual_carbon'])
+            actual_intensity = float(usage['actual_intensity'])
+            energy = float(usage['total_energy'])
+
+            # Find greenest hour in predictions
+            greenest = min(predictions, key=lambda x: x['predicted_intensity'])
+            optimal_intensity = greenest['predicted_intensity']
+            optimal_carbon = energy * optimal_intensity
+
+            if actual_intensity > optimal_intensity * 1.15:  # 15% threshold
+                savings = actual_carbon - optimal_carbon
+                total_missed_savings += savings
+
+                opportunities.append({
+                    'hour': hour,
+                    'actual_intensity': round(actual_intensity, 2),
+                    'optimal_intensity': round(optimal_intensity, 2),
+                    'optimal_hour': greenest['hour'],
+                    'carbon_emitted': round(actual_carbon, 4),
+                    'carbon_could_have_been': round(optimal_carbon, 4),
+                    'missed_savings_gco2': round(savings, 4),
+                    'percent_savings_missed': round((savings / actual_carbon) * 100, 1)
+                })
+
+        return jsonify({
+            'opportunities': opportunities,
+            'total_missed_savings_gco2': round(total_missed_savings, 4),
+            'total_missed_savings_kg': round(total_missed_savings / 1000, 6),
+            'opportunity_count': len(opportunities),
+            'timezone': 'Asia/Kolkata (IST)'
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
+    load_ml_model()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

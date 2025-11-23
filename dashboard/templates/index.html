@@ -14,633 +14,452 @@
     ></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body {
-        margin: 0;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-          "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-          sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-    </style>
   </head>
   <body>
     <div id="root"></div>
 
     <script type="text/babel">
-            const { useState, useEffect } = React;
+      const { useState, useEffect } = React;
 
-            // Lucide React icons as simple SVG components
-            const Battery = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <rect x="2" y="7" width="16" height="10" rx="2" ry="2" />
-                <line x1="22" y1="11" x2="22" y2="13" />
-              </svg>
-            );
+      // Icon Components
+      const Zap = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
+      );
 
-            const Zap = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-            );
+      const TrendingDown = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+          <polyline points="17 18 23 18 23 12" />
+        </svg>
+      );
 
-            const TrendingDown = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
-                <polyline points="17 18 23 18 23 12" />
-              </svg>
-            );
+      const AlertCircle = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      );
 
-            const TrendingUp = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                <polyline points="17 6 23 6 23 12" />
-              </svg>
-            );
+      const CheckCircle = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+      );
 
-            const Clock = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            );
+      const Award = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <circle cx="12" cy="8" r="7" />
+          <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+        </svg>
+      );
 
-            const AlertCircle = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-            );
+      const Brain = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+        >
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
+        </svg>
+      );
 
-            const CheckCircle = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            );
+      const EnhancedDashboard = () => {
+        const [data, setData] = useState(null);
+        const [mlInsights, setMlInsights] = useState(null);
+        const [impactScore, setImpactScore] = useState(null);
+        const [loading, setLoading] = useState(true);
 
-            const Award = ({ className }) => (
-              <svg
-                className={className}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth="2"
-              >
-                <circle cx="12" cy="8" r="7" />
-                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-              </svg>
-            );
+        useEffect(() => {
+          fetchData();
+          const interval = setInterval(fetchData, 10000); // 10s refresh
+          return () => clearInterval(interval);
+        }, []);
 
-            const CarbonAwareDashboard = () => {
-              const [data, setData] = useState(null);
-              const [loading, setLoading] = useState(true);
-              const [error, setError] = useState(null);
-              const [currentHour] = useState(new Date().getHours());
-              const [isUpdating, setIsUpdating] = useState(false);
-              const [lastUpdate, setLastUpdate] = useState(new Date());
+        const fetchData = async () => {
+          try {
+            const [summaryRes, mlRes, scoreRes] = await Promise.all([
+              fetch("/api/dashboard/summary"),
+              fetch("/api/dashboard/ml-insights"),
+              fetch("/api/dashboard/impact-score"),
+            ]);
 
-              useEffect(() => {
-                fetchData();
-                const interval = setInterval(fetchData, 5000);
-                return () => clearInterval(interval);
-              }, []);
+            const summary = await summaryRes.json();
+            const ml = await mlRes.json();
+            const score = await scoreRes.json();
 
-              const fetchData = async () => {
-                setIsUpdating(true);
-                try {
-                  const response = await fetch("/api/dashboard/summary");
-                  const result = await response.json();
+            setData(summary);
+            setMlInsights(ml);
+            setImpactScore(score);
+            setLoading(false);
+          } catch (err) {
+            console.error("Fetch error:", err);
+          }
+        };
 
-                  if (result.error) {
-                    setError(result.error);
-                    return;
-                  }
+        if (loading) {
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+              <div className="text-xl text-gray-600">Loading insights...</div>
+            </div>
+          );
+        }
 
-                  if (!result.by_hour?.hourly_breakdown) {
-                    setError("No hourly data available");
-                    return;
-                  }
+        const rec = mlInsights?.recommendation || {};
+        const statusColors = {
+          excellent: "bg-green-50 border-green-500 text-green-800",
+          good: "bg-blue-50 border-blue-500 text-blue-800",
+          moderate: "bg-yellow-50 border-yellow-500 text-yellow-800",
+          poor: "bg-red-50 border-red-500 text-red-800",
+        };
 
-                  setData(result);
-                  setLastUpdate(new Date());
-                  setError(null);
-                } catch (err) {
-                  setError(err.message);
-                } finally {
-                  setLoading(false);
-                  setIsUpdating(false);
-                }
-              };
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6">
+            <div className="max-w-7xl mx-auto space-y-6">
+              {/* Header */}
+              <div className="text-center mb-8">
+                <h1 className="text-4xl font-bold text-gray-800 flex items-center justify-center gap-3">
+                  <Brain className="w-10 h-10 text-purple-600" />
+                  AI-Powered Carbon Intelligence
+                </h1>
+                <p className="text-gray-600 mt-2">
+                  Real-time insights • ML predictions • Green computing coach
+                </p>
+              </div>
 
-              const analyzeGridIntensity = (hourlyData) => {
-                if (!hourlyData || hourlyData.length === 0) return null;
-
-                const hours = hourlyData.map((h) => ({
-                  hour: h.hour,
-                  intensity: h.avg_grid_intensity_gco2_kwh,
-                  carbon: h.total_carbon_grams,
-                }));
-
-                const intensities = hours.map((h) => h.intensity);
-                const avgIntensity =
-                  intensities.reduce((a, b) => a + b, 0) / intensities.length;
-                const minIntensity = Math.min(...intensities);
-                const maxIntensity = Math.max(...intensities);
-
-                const sortedByIntensity = [...hours].sort(
-                  (a, b) => a.intensity - b.intensity,
-                );
-                const greenestHours = sortedByIntensity.slice(0, 3);
-                const dirtiestHours = sortedByIntensity.slice(-3).reverse();
-
-                const currentHourData = hours.find((h) => h.hour === currentHour);
-                const currentIntensity = currentHourData?.intensity || avgIntensity;
-                const percentDiff =
-                  ((avgIntensity - currentIntensity) / avgIntensity) * 100;
-
-                const avgCarbonPerHour =
-                  hours.reduce((sum, h) => sum + h.carbon, 0) / hours.length;
-                const greenestAvgCarbon =
-                  greenestHours.reduce((sum, h) => sum + h.carbon, 0) /
-                  greenestHours.length;
-                const potentialSavings =
-                  ((avgCarbonPerHour - greenestAvgCarbon) / avgCarbonPerHour) * 100;
-
-                return {
-                  avgIntensity,
-                  minIntensity,
-                  maxIntensity,
-                  greenestHours,
-                  dirtiestHours,
-                  currentIntensity,
-                  percentDiff,
-                  potentialSavings,
-                  isCurrentGreen: currentIntensity < avgIntensity,
-                  hourlyData: hours,
-                };
-              };
-
-              const getStatusColor = (percentDiff) => {
-                if (percentDiff > 20) return "text-green-600 bg-green-50";
-                if (percentDiff > 0) return "text-blue-600 bg-blue-50";
-                if (percentDiff > -20) return "text-yellow-600 bg-yellow-50";
-                return "text-red-600 bg-red-50";
-              };
-
-              const getStatusIcon = (percentDiff) => {
-                if (percentDiff > 10) return <CheckCircle className="w-6 h-6" />;
-                if (percentDiff > -10) return <AlertCircle className="w-6 h-6" />;
-                return <TrendingUp className="w-6 h-6" />;
-              };
-
-              const getRecommendation = (analysis) => {
-                if (analysis.percentDiff > 15) {
-                  return {
-                    type: "excellent",
-                    title: "Excellent Time to Compute! 🌱",
-                    message:
-                      "Grid is significantly cleaner than average. Perfect for running intensive workloads.",
-                    action: "Run batch jobs, updates, or data processing now",
-                  };
-                } else if (analysis.percentDiff > 0) {
-                  return {
-                    type: "good",
-                    title: "Good Time to Compute ✓",
-                    message:
-                      "Grid is cleaner than average. Suitable for most workloads.",
-                    action: "Normal operations are fine",
-                  };
-                } else if (analysis.percentDiff > -15) {
-                  return {
-                    type: "moderate",
-                    title: "Moderate Carbon Intensity ⚠️",
-                    message:
-                      "Grid is slightly dirtier than average. Consider deferring non-urgent tasks.",
-                    action: "Delay intensive workloads if possible",
-                  };
-                } else {
-                  const waitHours =
-                    (analysis.greenestHours[0]?.hour - currentHour + 24) % 24;
-                  return {
-                    type: "poor",
-                    title: "High Carbon Intensity 🚫",
-                    message:
-                      "Grid is significantly dirtier than average. Avoid intensive workloads.",
-                    action: `Wait ${waitHours}h for cleaner grid`,
-                  };
-                }
-              };
-
-              if (loading) {
-                return (
-                  <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
-                    <div className="text-xl text-gray-600">
-                      Loading carbon analysis...
-                    </div>
-                  </div>
-                );
-              }
-
-              if (error) {
-                return (
-                  <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-                      <h2 className="text-red-800 font-bold text-lg mb-2">
-                        Error Loading Data
-                      </h2>
-                      <p className="text-red-600">{error}</p>
-                    </div>
-                  </div>
-                );
-              }
-
-              const analysis = analyzeGridIntensity(data.by_hour.hourly_breakdown);
-              if (!analysis) return null;
-
-              const recommendation = getRecommendation(analysis);
-              const statusColor = getStatusColor(analysis.percentDiff);
-
-              return (
-                <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6">
-                  <div className="max-w-7xl mx-auto space-y-6">
-                    <div className="text-center mb-8">
-                      <div className="flex items-center justify-center gap-3">
-                        <h1 className="text-4xl font-bold text-gray-800">
-                          ⚡ Carbon-Aware Computing Dashboard
-                        </h1>
-                        {isUpdating && (
-                          <span className="text-blue-600 animate-pulse">🔄</span>
-                        )}
+              {/* Impact Score Card */}
+              {impactScore && (
+                <div className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl p-8 text-white shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Award className="w-8 h-8" />
+                        <h2 className="text-3xl font-bold">Your Green Score</h2>
                       </div>
-                      <p className="text-gray-600">
-                        Optimize your workloads based on real-time grid carbon intensity
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Last updated: {lastUpdate.toLocaleTimeString()}
+                      <p className="text-xl opacity-90">
+                        {impactScore.message}
                       </p>
                     </div>
-
-                    <div
-                      className={`${statusColor} border-2 rounded-xl p-6 shadow-lg`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          {getStatusIcon(analysis.percentDiff)}
-                          <div>
-                            <h2 className="text-2xl font-bold mb-1">
-                              {recommendation.title}
-                            </h2>
-                            <p className="text-lg">{recommendation.message}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-3xl font-bold">
-                            {Math.abs(analysis.percentDiff).toFixed(1)}%
-                          </div>
-                          <div className="text-sm opacity-75">
-                            {analysis.percentDiff > 0 ? "cleaner" : "dirtier"} than
-                            avg
-                          </div>
-                        </div>
+                    <div className="text-center">
+                      <div className="text-7xl font-bold">
+                        {impactScore.grade}
                       </div>
-                      <div className="mt-4 pt-4 border-t border-current border-opacity-20">
-                        <div className="flex items-center space-x-2">
-                          <Clock className="w-5 h-5" />
-                          <span className="font-semibold">Action:</span>
-                          <span>{recommendation.action}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-600">Current Hour</span>
-                          <Zap className="w-5 h-5 text-blue-500" />
-                        </div>
-                        <div className="text-3xl font-bold text-gray-800 transition-all duration-500">
-                          {currentHour}:00
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          {analysis.currentIntensity.toFixed(0)} gCO₂/kWh
-                        </div>
-                      </div>
-
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-600">Average Intensity</span>
-                          <Battery className="w-5 h-5 text-gray-500" />
-                        </div>
-                        <div className="text-3xl font-bold text-gray-800 transition-all duration-500">
-                          {analysis.avgIntensity.toFixed(0)}
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          gCO₂/kWh today
-                        </div>
-                      </div>
-
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-600">Greenest Hour</span>
-                          <TrendingDown className="w-5 h-5 text-green-500" />
-                        </div>
-                        <div className="text-3xl font-bold text-green-600">
-                          {analysis.greenestHours[0].hour}:00
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          {analysis.minIntensity.toFixed(0)} gCO₂/kWh
-                        </div>
-                      </div>
-
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-600">Potential Savings</span>
-                          <Award className="w-5 h-5 text-purple-500" />
-                        </div>
-                        <div className="text-3xl font-bold text-purple-600">
-                          {analysis.potentialSavings.toFixed(1)}%
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          by shifting to green hours
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center space-x-2 mb-4">
-                          <TrendingDown className="w-6 h-6 text-green-500" />
-                          <h3 className="text-xl font-bold text-gray-800">
-                            🌱 Best Hours to Compute
-                          </h3>
-                        </div>
-                        <div className="space-y-3">
-                          {analysis.greenestHours.map((hour, idx) => (
-                            <div
-                              key={hour.hour}
-                              className="flex items-center justify-between p-3 bg-green-50 rounded-lg"
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div className="text-2xl font-bold text-green-600">
-                                  #{idx + 1}
-                                </div>
-                                <div>
-                                  <div className="font-semibold text-gray-800">
-                                    {hour.hour}:00 - {hour.hour + 1}:00
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {hour.intensity.toFixed(0)} gCO₂/kWh
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-semibold text-green-600">
-                                  {(
-                                    ((analysis.avgIntensity - hour.intensity) /
-                                      analysis.avgIntensity) *
-                                    100
-                                  ).toFixed(0)}
-                                  %
-                                </div>
-                                <div className="text-xs text-gray-500">cleaner</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4 p-3 bg-green-100 rounded-lg">
-                          <p className="text-sm text-green-800">
-                            💡 <strong>Tip:</strong> Schedule batch jobs, backups, and
-                            data processing during these hours to minimize carbon
-                            impact.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-white rounded-xl p-6 shadow-md">
-                        <div className="flex items-center space-x-2 mb-4">
-                          <TrendingUp className="w-6 h-6 text-red-500" />
-                          <h3 className="text-xl font-bold text-gray-800">
-                            🚫 Hours to Avoid
-                          </h3>
-                        </div>
-                        <div className="space-y-3">
-                          {analysis.dirtiestHours.map((hour, idx) => (
-                            <div
-                              key={hour.hour}
-                              className="flex items-center justify-between p-3 bg-red-50 rounded-lg"
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div className="text-2xl font-bold text-red-600">
-                                  #{idx + 1}
-                                </div>
-                                <div>
-                                  <div className="font-semibold text-gray-800">
-                                    {hour.hour}:00 - {hour.hour + 1}:00
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {hour.intensity.toFixed(0)} gCO₂/kWh
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-semibold text-red-600">
-                                  +
-                                  {(
-                                    ((hour.intensity - analysis.avgIntensity) /
-                                      analysis.avgIntensity) *
-                                    100
-                                  ).toFixed(0)}
-                                  %
-                                </div>
-                                <div className="text-xs text-gray-500">dirtier</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4 p-3 bg-red-100 rounded-lg">
-                          <p className="text-sm text-red-800">
-                            ⚠️ <strong>Warning:</strong> Defer non-critical workloads
-                            during peak hours. Waiting can reduce emissions by up to{" "}
-                            {analysis.potentialSavings.toFixed(0)}%.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-6 shadow-md">
-                      <h3 className="text-xl font-bold text-gray-800 mb-4">
-                        📊 24-Hour Carbon Intensity Timeline
-                      </h3>
-                      <div className="space-y-2">
-                        {analysis.hourlyData.map((hour) => {
-                          const intensityPercent =
-                            ((hour.intensity - analysis.minIntensity) /
-                              (analysis.maxIntensity - analysis.minIntensity)) *
-                            100;
-                          const isGreen = hour.intensity < analysis.avgIntensity;
-                          const isCurrent = hour.hour === currentHour;
-
-                          return (
-                            <div
-                              key={hour.hour}
-                              className="flex items-center space-x-3"
-                            >
-                              <div
-                                className={`w-16 text-right font-semibold ${isCurrent ? "text-blue-600" : "text-gray-600"}`}
-                              >
-                                {hour.hour}:00
-                              </div>
-                              <div className="flex-1 relative h-8 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                  className={`absolute inset-y-0 left-0 ${
-                                    isGreen ? "bg-green-400" : "bg-red-400"
-                                  } transition-all duration-300`}
-      {% raw %}
-      style={{ width: `${intensityPercent}%` }}
-      {% endraw %}
-                                />
-                                {isCurrent && (
-                                  <div className="absolute inset-0 border-2 border-blue-500 rounded-full" />
-                                )}
-                              </div>
-                              <div className="w-24 text-right text-sm font-medium text-gray-700">
-                                {hour.intensity.toFixed(0)} gCO₂
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 shadow-md border-2 border-purple-200">
-                      <h3 className="text-xl font-bold text-gray-800 mb-4">
-                        💰 Potential Carbon Savings
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-lg p-4">
-                          <div className="text-sm text-gray-600 mb-1">
-                            If 50% shifted to green hours
-                          </div>
-                          <div className="text-2xl font-bold text-purple-600">
-                            {(analysis.potentialSavings / 2).toFixed(1)}%
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            carbon reduction
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4">
-                          <div className="text-sm text-gray-600 mb-1">
-                            If 100% shifted to green hours
-                          </div>
-                          <div className="text-2xl font-bold text-purple-600">
-                            {analysis.potentialSavings.toFixed(1)}%
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            maximum savings
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4">
-                          <div className="text-sm text-gray-600 mb-1">
-                            Avg time to wait
-                          </div>
-                          <div className="text-2xl font-bold text-purple-600">
-                            {Math.abs(analysis.greenestHours[0].hour - currentHour)}h
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            for greenest grid
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-6 shadow-md">
-                      <h3 className="text-xl font-bold text-gray-800 mb-4">
-                        📈 System Statistics
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <div className="text-gray-600 text-sm">Total Devices</div>
-                          <div className="text-2xl font-bold text-gray-800">
-                            {data.system_stats.unique_devices}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600 text-sm">
-                            Total Measurements
-                          </div>
-                          <div className="text-2xl font-bold text-gray-800">
-                            {data.system_stats.total_records}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600 text-sm">Total Carbon</div>
-                          <div className="text-2xl font-bold text-gray-800">
-                            {data.carbon_summary.total_carbon_grams.toFixed(2)}g
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600 text-sm">Avg Power</div>
-                          <div className="text-2xl font-bold text-gray-800">
-                            {data.system_stats.average_power_watts.toFixed(1)}W
-                          </div>
-                        </div>
+                      <div className="text-3xl mt-2">
+                        {impactScore.score}/100
                       </div>
                     </div>
                   </div>
                 </div>
-              );
-            };
+              )}
 
-            ReactDOM.render(
-              <CarbonAwareDashboard />,
-              document.getElementById("root"),
-            );
+              {/* ML Recommendation Banner */}
+              {mlInsights?.ml_available && (
+                <div
+                  className={`${statusColors[rec.status] || statusColors.moderate} border-2 rounded-xl p-6 shadow-lg`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      {rec.status === "excellent" && (
+                        <CheckCircle className="w-8 h-8" />
+                      )}
+                      {rec.status === "poor" && (
+                        <AlertCircle className="w-8 h-8" />
+                      )}
+                      {(rec.status === "good" || rec.status === "moderate") && (
+                        <Zap className="w-8 h-8" />
+                      )}
+                      <div>
+                        <h2 className="text-2xl font-bold mb-1">
+                          {rec.message}
+                        </h2>
+                        <p className="text-lg font-semibold">💡 {rec.action}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-4xl font-bold">
+                        {Math.abs(rec.percent_vs_average)}%
+                      </div>
+                      <div className="text-sm opacity-75">
+                        {rec.percent_vs_average > 0 ? "dirtier" : "cleaner"}{" "}
+                        than avg
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Missed Opportunities - KEY SECTION FOR PROF */}
+              {mlInsights?.missed_opportunities &&
+                mlInsights.missed_opportunities.count > 0 && (
+                  <div className="bg-white rounded-xl p-6 shadow-md border-2 border-orange-200">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      ⚠️ Missed Carbon Savings Opportunities
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="bg-orange-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600">
+                          Total Missed Savings
+                        </div>
+                        <div className="text-3xl font-bold text-orange-600">
+                          {(
+                            mlInsights.missed_opportunities.total_missed_kg *
+                            1000
+                          ).toFixed(1)}
+                          g CO₂
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          ={" "}
+                          {mlInsights.missed_opportunities.km_equivalent.toFixed(
+                            0,
+                          )}{" "}
+                          km not driven
+                        </div>
+                      </div>
+
+                      <div className="bg-green-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600">
+                          Potential Savings
+                        </div>
+                        <div className="text-3xl font-bold text-green-600">
+                          {
+                            mlInsights.missed_opportunities
+                              .potential_savings_percent
+                          }
+                          %
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          by following ML recommendations
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600">
+                          Opportunities Found
+                        </div>
+                        <div className="text-3xl font-bold text-blue-600">
+                          {mlInsights.missed_opportunities.count}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          times you could've optimized
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold mb-3 text-gray-700">
+                        Recent Examples:
+                      </h4>
+                      {mlInsights.missed_opportunities.opportunities
+                        .slice(0, 3)
+                        .map((opp, idx) => (
+                          <div
+                            key={idx}
+                            className="mb-3 pb-3 border-b border-gray-200 last:border-0"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium">
+                                  Hour {opp.hour}:00 - You used power at{" "}
+                                  {opp.actual_intensity} gCO₂/kWh
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  ⏰ Best time was {opp.optimal_hour}:00 (
+                                  {opp.optimal_intensity} gCO₂/kWh)
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-lg font-bold text-red-600">
+                                  -{opp.percent_savings_missed}%
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  missed
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Next 24h Predictions */}
+              {mlInsights?.predictions && mlInsights.predictions.length > 0 && (
+                <div className="bg-white rounded-xl p-6 shadow-md">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Brain className="w-6 h-6 text-purple-600" />
+                    ML-Predicted Grid Intensity (Next 24h)
+                  </h3>
+                  <div className="space-y-2">
+                    {mlInsights.predictions.map((pred, idx) => {
+                      const avgIntensity =
+                        mlInsights.predictions.reduce(
+                          (sum, p) => sum + p.predicted_intensity,
+                          0,
+                        ) / mlInsights.predictions.length;
+                      const isGreen = pred.predicted_intensity < avgIntensity;
+                      const isCurrent = pred.hour === new Date().getHours();
+                      const barWidth =
+                        ((pred.predicted_intensity - 300) / 500) * 100;
+
+                      return (
+                        <div key={idx} className="flex items-center gap-3">
+                          <div
+                            className={`w-16 text-right font-semibold ${isCurrent ? "text-blue-600" : "text-gray-600"}`}
+                          >
+                            {pred.hour}:00
+                          </div>
+                          <div className="flex-1 relative h-8 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`absolute inset-y-0 left-0 ${isGreen ? "bg-green-400" : "bg-red-400"} transition-all`}
+                              {% raw %}
+                              style={{ width: `${Math.min(100, Math.max(10, barWidth))}%` }}
+                              {% endraw %}
+
+                            />
+                            {isCurrent && (
+                              <div className="absolute inset-0 border-2 border-blue-500 rounded-full" />
+                            )}
+                          </div>
+                          <div className="w-24 text-sm font-medium text-gray-700">
+                            {pred.predicted_intensity} gCO₂
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Greenest Hours Recommendation */}
+              {mlInsights?.greenest_hours &&
+                mlInsights.greenest_hours.length > 0 && (
+                  <div className="bg-white rounded-xl p-6 shadow-md border-2 border-green-200">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <TrendingDown className="w-6 h-6 text-green-500" />
+                      🌱 Best Times to Schedule Heavy Workloads
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                      {mlInsights.greenest_hours.map((hour, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-green-50 rounded-lg p-4 text-center border border-green-200"
+                        >
+                          <div className="text-2xl font-bold text-green-600">
+                            #{idx + 1}
+                          </div>
+                          <div className="text-3xl font-bold text-gray-800">
+                            {hour.hour}:00
+                          </div>
+                          <div className="text-sm text-gray-600 mt-2">
+                            {hour.predicted_intensity} gCO₂/kWh
+                          </div>
+                          <div className="text-xs text-green-600 font-semibold mt-1">
+                            {(
+                              (1 -
+                                hour.predicted_intensity /
+                                  mlInsights.predictions[0]
+                                    .predicted_intensity) *
+                              100
+                            ).toFixed(0)}
+                            % cleaner
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Your Carbon Journey */}
+              <div className="bg-white rounded-xl p-6 shadow-md">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  📊 Your Carbon Journey
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600">Total Emissions</div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {(
+                        mlInsights?.carbon_stats?.total_collected_kg || 0
+                      ).toFixed(3)}{" "}
+                      kg
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600">Measurements</div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {mlInsights?.carbon_stats?.measurements || 0}
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600">
+                      Avg per Measurement
+                    </div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {(
+                        ((mlInsights?.carbon_stats?.total_collected_kg || 0) *
+                          1000) /
+                        (mlInsights?.carbon_stats?.measurements || 1)
+                      ).toFixed(2)}
+                      g
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600">
+                      Could Have Saved
+                    </div>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {(
+                        mlInsights?.missed_opportunities?.total_missed_kg *
+                          1000 || 0
+                      ).toFixed(1)}
+                      g
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      ReactDOM.render(<EnhancedDashboard />, document.getElementById("root"));
     </script>
   </body>
 </html>

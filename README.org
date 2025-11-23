@@ -2,97 +2,20 @@
 
 * How to Run
 
-** Start Minikube
+** Run the Minikube Script
 #+begin_src bash
-# Start a local Kubernetes cluster
-minikube start --driver=docker
-
-# Verify it's running
-kubectl get nodes
+./rebuild-minikube
 #+end_src
 
-** Configure Docker to Use MiniKube's Docker Daemon
-#+begin_src bash
-# Run this command and follow its output
-eval $(minikube docker-env)
-
-# Verify it worked
-docker ps | grep minikube
-#+end_src
-You'll need to run ~eval $(minikube docker-env)~ in each new terminal session.
-
-** Build Docker Images
-Navigate to the project's root.
-*** Build the ingestion API
-#+begin_src bash
-docker build -t carbon-ingestion-api:latest -f profiling-engine/Dockerfile profiling-engine/
-#+end_src
-
-*** Build the profiling worker
-#+begin_src bash
-docker build -t carbon-profiler-worker:latest -f profiling-worker/Dockerfile profiling-worker/
-#+end_src
-
-*** Build the dashboard
-#+begin_src bash
-docker build -t carbon-dashboard:latest -f dashboard/Dockerfile dashboard/
-#+end_src
-
-*** Verify images are built
-#+begin_src bash
-docker images | grep carbon
-#+end_src
-
-** Deploy to Kubernetes
-While still being in the project's root:
-*** Deploy everything (database, API, worker)
-#+begin_src bash
-kubectl apply -f k8s-manifests/all-in-one.yaml
-#+end_src
-
-*** Deploy the dashboard
-#+begin_src bash
-kubectl apply -f k8s-manifests/dashboard.yaml
-#+end_src
-
-*** Check the status
+** Get all info about Pods and make sure all of them are ~Running~
 #+begin_src bash
 kubectl get pods -n carbon-profiling
 #+end_src
 
-*** Wait until all pods show "Running" status (this may take 1-2 minutes)
+** Run the Device Agent
 #+begin_src bash
-watch kubectl get pods -n carbon-profiling
+cd device-agent/
+python device_agent.py             
 #+end_src
 
-** Initiate Metrics Collection
-*** Access URLs
-#+begin_src bash
-# Get the Ingestion API URL
-minikube service ingestion-api-service -n carbon-profiling --url
-
-# Get the Dashboard URL
-minikube service dashboard-service -n carbon-profiling --url
-#+end_src
-
-*** Running Device Agent
-In a new terminal, navigate to the project's root, and put the ingestion API URL
-in ~API_ENDPOINT~:
-#+begin_src bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Get the API endpoint from Step 5 and export it
-export API_ENDPOINT=""  # Replace with actual URL from Step 5
-export SEND_TO_API=true
-
-# Run the agent
-python device_agent.py
-#+end_src
-
-** View Dashboard
-#+begin_src bash
-# This will open it automatically
-minikube service dashboard-service -n carbon-profiling
-#+end_src
-Or just visit the Dashboard URL obtained in the previous step.
+** Open the [[http://192.168.49.2:30800/][Carbon-Aware Computing Dashboard]] 

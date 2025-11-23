@@ -142,14 +142,17 @@
               const [loading, setLoading] = useState(true);
               const [error, setError] = useState(null);
               const [currentHour] = useState(new Date().getHours());
+              const [isUpdating, setIsUpdating] = useState(false);
+              const [lastUpdate, setLastUpdate] = useState(new Date());
 
               useEffect(() => {
                 fetchData();
-                const interval = setInterval(fetchData, 30000);
+                const interval = setInterval(fetchData, 5000);
                 return () => clearInterval(interval);
               }, []);
 
               const fetchData = async () => {
+                setIsUpdating(true);
                 try {
                   const response = await fetch("/api/dashboard/summary");
                   const result = await response.json();
@@ -165,11 +168,13 @@
                   }
 
                   setData(result);
+                  setLastUpdate(new Date());
                   setError(null);
                 } catch (err) {
                   setError(err.message);
                 } finally {
                   setLoading(false);
+                  setIsUpdating(false);
                 }
               };
 
@@ -305,12 +310,19 @@
                 <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6">
                   <div className="max-w-7xl mx-auto space-y-6">
                     <div className="text-center mb-8">
-                      <h1 className="text-4xl font-bold text-gray-800 mb-2">
-                        ⚡ Carbon-Aware Computing Dashboard
-                      </h1>
+                      <div className="flex items-center justify-center gap-3">
+                        <h1 className="text-4xl font-bold text-gray-800">
+                          ⚡ Carbon-Aware Computing Dashboard
+                        </h1>
+                        {isUpdating && (
+                          <span className="text-blue-600 animate-pulse">🔄</span>
+                        )}
+                      </div>
                       <p className="text-gray-600">
-                        Optimize your workloads based on real-time grid carbon
-                        intensity
+                        Optimize your workloads based on real-time grid carbon intensity
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Last updated: {lastUpdate.toLocaleTimeString()}
                       </p>
                     </div>
 
@@ -352,7 +364,7 @@
                           <span className="text-gray-600">Current Hour</span>
                           <Zap className="w-5 h-5 text-blue-500" />
                         </div>
-                        <div className="text-3xl font-bold text-gray-800">
+                        <div className="text-3xl font-bold text-gray-800 transition-all duration-500">
                           {currentHour}:00
                         </div>
                         <div className="text-sm text-gray-500 mt-1">
@@ -365,7 +377,7 @@
                           <span className="text-gray-600">Average Intensity</span>
                           <Battery className="w-5 h-5 text-gray-500" />
                         </div>
-                        <div className="text-3xl font-bold text-gray-800">
+                        <div className="text-3xl font-bold text-gray-800 transition-all duration-500">
                           {analysis.avgIntensity.toFixed(0)}
                         </div>
                         <div className="text-sm text-gray-500 mt-1">

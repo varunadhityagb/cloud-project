@@ -4,3 +4,4 @@
 tmp/
 device-agent/.device_config.json
 */__pycache__/
+device-agent/sample_metrics.json

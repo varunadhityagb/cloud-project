@@ -20,6 +20,16 @@ from cpu_detection import CPUDataManager
 from gpu_detection import GPUDataManager
 from timezone_utils import now_local, get_timezone_display_name
 
+# System tray support
+try:
+    import pystray
+    from pystray import MenuItem as item
+    from PIL import Image, ImageDraw
+    TRAY_AVAILABLE = True
+except ImportError:
+    TRAY_AVAILABLE = False
+    print("⚠️  pystray not available. Install with: pip install pystray pillow")
+
 
 class DeviceAgentGUI:
     """Main GUI Application for Device Agent."""
@@ -34,6 +44,8 @@ class DeviceAgentGUI:
         self.agent = None
         self.monitor_thread = None
         self.log_queue = queue.Queue()
+        self.tray_icon = None
+        self.is_visible = True
         
         # Load configuration
         self.config = DeviceConfig()
@@ -49,6 +61,10 @@ class DeviceAgentGUI:
         
         # Bind close event
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+        # Setup system tray if available
+        if TRAY_AVAILABLE and self.settings.get('enable_tray', True):
+            self._setup_tray()
         
     def _setup_styles(self):
         """Configure ttk styles."""
@@ -141,6 +157,14 @@ class DeviceAgentGUI:
             text="🗑️ Clear Logs",
             command=self._clear_logs
         ).pack(side='left', padx=5)
+        
+        if TRAY_AVAILABLE:
+            self.minimize_to_tray_button = ttk.Button(
+                button_frame,
+                text="📥 Minimize to Tray",
+                command=self._minimize_to_tray
+            )
+            self.minimize_to_tray_button.pack(side='left', padx=5)
         
         # Log display
         log_frame = ttk.LabelFrame(self.monitoring_frame, text="Activity Log", padding=10)
@@ -255,6 +279,32 @@ class DeviceAgentGUI:
             command=self._update_databases
         ).grid(row=1, column=0, sticky='w', pady=5)
         
+        # System Tray Settings
+        if TRAY_AVAILABLE:
+            tray_frame = ttk.LabelFrame(scrollable_frame, text="System Tray", padding=10)
+            tray_frame.pack(fill='x', padx=10, pady=10)
+            
+            self.enable_tray_var = tk.BooleanVar(value=self.settings.get('enable_tray', True))
+            ttk.Checkbutton(
+                tray_frame,
+                text="Enable system tray icon",
+                variable=self.enable_tray_var
+            ).grid(row=0, column=0, sticky='w', pady=5)
+            
+            self.minimize_on_close_var = tk.BooleanVar(value=self.settings.get('minimize_on_close', False))
+            ttk.Checkbutton(
+                tray_frame,
+                text="Minimize to tray on close (instead of exit)",
+                variable=self.minimize_on_close_var
+            ).grid(row=1, column=0, sticky='w', pady=5)
+            
+            self.start_minimized_var = tk.BooleanVar(value=self.settings.get('start_minimized', False))
+            ttk.Checkbutton(
+                tray_frame,
+                text="Start minimized to tray",
+                variable=self.start_minimized_var
+            ).grid(row=2, column=0, sticky='w', pady=5)
+        
         # Save button
         ttk.Button(
             scrollable_frame,
@@ -290,6 +340,95 @@ class DeviceAgentGUI:
         # Initial load
         self._refresh_hardware_info()
         
+    def _setup_tray(self):
+        """Setup system tray icon."""
+        if not TRAY_AVAILABLE:
+            return
+        
+        # Create icon image
+        def create_icon_image():
+            # Create a simple icon
+            width = 64
+            height = 64
+            color1 = (76, 175, 80)  # Green
+            color2 = (33, 150, 243)  # Blue
+            
+            image = Image.new('RGB', (width, height), color1)
+            draw = ImageDraw.Draw(image)
+            
+            # Draw a leaf-like shape for carbon/eco theme
+            draw.ellipse([10, 10, 54, 54], fill=color2)
+            draw.rectangle([20, 25, 44, 45], fill=color1)
+            
+            return image
+        
+        icon_image = create_icon_image()
+        
+        # Create menu
+        menu = pystray.Menu(
+            item('Show Window', self._show_window, default=True),
+            item('Start Monitoring', self._start_monitoring_tray, enabled=lambda item: not self.is_running),
+            item('Stop Monitoring', self._stop_monitoring_tray, enabled=lambda item: self.is_running),
+            pystray.Menu.SEPARATOR,
+            item('Exit', self._quit_from_tray)
+        )
+        
+        # Create tray icon
+        self.tray_icon = pystray.Icon(
+            "carbon_agent",
+            icon_image,
+            "Carbon Profiling Agent",
+            menu
+        )
+        
+        # Run tray icon in separate thread
+        tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
+        tray_thread.start()
+        
+        self._log("System tray icon enabled", 'success')
+        
+        # Start minimized if configured
+        if self.settings.get('start_minimized', False):
+            self.root.after(500, self._minimize_to_tray)
+    
+    def _show_window(self, icon=None, item=None):
+        """Show the main window."""
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+        self.is_visible = True
+    
+    def _minimize_to_tray(self):
+        """Minimize window to system tray."""
+        if TRAY_AVAILABLE and self.tray_icon:
+            self.root.withdraw()
+            self.is_visible = False
+            self._log("Minimized to system tray", 'info')
+        else:
+            messagebox.showinfo("Not Available", "System tray is not available")
+    
+    def _start_monitoring_tray(self, icon=None, item=None):
+        """Start monitoring from tray."""
+        self.root.after(0, self._start_monitoring)
+    
+    def _stop_monitoring_tray(self, icon=None, item=None):
+        """Stop monitoring from tray."""
+        self.root.after(0, self._stop_monitoring)
+    
+    def _quit_from_tray(self, icon=None, item=None):
+        """Quit application from tray."""
+        if self.tray_icon:
+            self.tray_icon.stop()
+        self.root.after(0, self._force_quit)
+    
+    def _force_quit(self):
+        """Force quit the application."""
+        if self.is_running:
+            self._stop_monitoring()
+            time.sleep(0.5)
+        self.root.quit()
+        self.root.destroy()
+    
     def _load_settings(self) -> dict:
         """Load settings from file."""
         settings_file = Path("agent_gui_settings.json")
@@ -308,7 +447,10 @@ class DeviceAgentGUI:
             'interval': 5,
             'top_processes': 5,
             'device_type': 'auto',
-            'auto_update_db': True
+            'auto_update_db': True,
+            'enable_tray': True,
+            'minimize_on_close': False,
+            'start_minimized': False
         }
     
     def _save_settings(self):
@@ -322,12 +464,18 @@ class DeviceAgentGUI:
             'auto_update_db': self.auto_update_db_var.get()
         }
         
+        # Add tray settings if available
+        if TRAY_AVAILABLE:
+            self.settings['enable_tray'] = self.enable_tray_var.get()
+            self.settings['minimize_on_close'] = self.minimize_on_close_var.get()
+            self.settings['start_minimized'] = self.start_minimized_var.get()
+        
         try:
             with open("agent_gui_settings.json", 'w') as f:
                 json.dump(self.settings, f, indent=2)
             
             self._log("Settings saved successfully", 'success')
-            messagebox.showinfo("Success", "Settings saved successfully!")
+            messagebox.showinfo("Success", "Settings saved successfully!\nRestart the app for tray settings to take effect.")
         except Exception as e:
             self._log(f"Error saving settings: {e}", 'error')
             messagebox.showerror("Error", f"Failed to save settings: {e}")
@@ -500,6 +648,10 @@ class DeviceAgentGUI:
         self.stop_button.config(state='normal')
         self.status_label.config(text="● Running", foreground='green')
         
+        # Update tray icon tooltip if available
+        if TRAY_AVAILABLE and self.tray_icon:
+            self.tray_icon.title = "Carbon Profiling Agent - Running"
+        
         self._log("=" * 70, 'info')
         self._log("Starting Device Agent Monitor", 'info')
         self._log("=" * 70, 'info')
@@ -517,6 +669,10 @@ class DeviceAgentGUI:
         self.start_button.config(state='normal')
         self.stop_button.config(state='disabled')
         self.status_label.config(text="● Stopped", foreground='red')
+        
+        # Update tray icon tooltip if available
+        if TRAY_AVAILABLE and self.tray_icon:
+            self.tray_icon.title = "Carbon Profiling Agent - Stopped"
         
         self._log("=" * 70, 'info')
         self._log("Monitoring stopped by user", 'info')
@@ -631,6 +787,11 @@ class DeviceAgentGUI:
     
     def _on_closing(self):
         """Handle window close event."""
+        # Check if minimize on close is enabled
+        if TRAY_AVAILABLE and self.settings.get('minimize_on_close', False) and self.tray_icon:
+            self._minimize_to_tray()
+            return
+        
         if self.is_running:
             result = messagebox.askyesno(
                 "Confirm Exit",
@@ -641,6 +802,10 @@ class DeviceAgentGUI:
             
             self._stop_monitoring()
             time.sleep(0.5)  # Give thread time to stop
+        
+        # Stop tray icon
+        if TRAY_AVAILABLE and self.tray_icon:
+            self.tray_icon.stop()
         
         self.root.destroy()
 
